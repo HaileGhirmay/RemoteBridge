@@ -1,9 +1,15 @@
 //! Windows 11 implementations of the `rb-core` platform traits.
 //!
 //! Compiles on every OS so the workspace builds everywhere, but the adapters
-//! themselves are Windows-only. They arrive in later prompts:
-//! `KeyStore` (CNG/TPM) in Prompt 03, `Tray`/`Banner`/`Hotkeys` in Prompt 05,
+//! themselves are Windows-only. Done: `KeyStore` (CNG, TPM when available).
+//! To come: `Tray`/`Banner`/`Hotkeys` in Prompt 05 and
 //! `Capture`/`AudioCapture`/`MicCapture`/`InputInjector` in Prompt 10.
+
+#[cfg(windows)]
+mod key_store;
+
+#[cfg(windows)]
+pub use key_store::{KeyBackend, KeyScope, ProviderPreference, WindowsKeyStore};
 
 /// Short name used in logs and diagnostics.
 pub const PLATFORM_NAME: &str = "windows";

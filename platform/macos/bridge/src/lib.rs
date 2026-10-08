@@ -1,10 +1,20 @@
 //! C ABI exposed to the macOS Swift app (`platform/macos`).
 //!
-//! The header is generated with cbindgen (`tools/gen-macos-header.sh`). The
-//! real surface (session manager handle, callbacks for the platform traits)
-//! is added as the Swift adapters arrive in Prompts 03, 05 and 10.
+//! The header is generated with cbindgen (`tools/gen-macos-header.sh`).
+//!
+//! Swift implements the platform traits (Secure Enclave key, ScreenCaptureKit,
+//! CGEvent, menu bar) and hands the Rust core a table of C callbacks; the
+//! Rust side wraps each table in a type that implements the matching
+//! `rb-core` trait. Done so far: [`ForeignKeyStore`] for `KeyStore`.
+
+mod key_store;
 
 use std::ffi::{CStr, c_char};
+
+pub use key_store::{
+    ForeignKeyStore, RB_ERR_BACKEND, RB_ERR_BUFFER, RB_ERR_KEY_EXISTS, RB_ERR_NO_KEY, RB_OK,
+    RbKeyStoreCallbacks,
+};
 
 static VERSION: &CStr = c"0.1.0";
 

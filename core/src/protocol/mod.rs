@@ -31,7 +31,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use sha2::{Digest, Sha256};
 
 /// base64url without padding, as used for signatures, nonces and JWK coordinates.
-pub(crate) fn b64url(bytes: &[u8]) -> String {
+pub fn b64url(bytes: &[u8]) -> String {
     URL_SAFE_NO_PAD.encode(bytes)
 }
 
