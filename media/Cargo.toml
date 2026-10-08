@@ -1,0 +1,36 @@
+[package]
+name = "rb-media"
+description = "RemoteBridge host media: WebRTC peer, signaling client, video and audio tracks, data channels."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+# A local signaling server and a scripted viewer, for tests (here and in the host crate).
+testing = ["dep:rb-signaling", "dep:jsonwebtoken"]
+
+[dependencies]
+async-trait = "0.1"
+bytes = "1"
+futures = "0.3"
+log = "0.4"
+openh264 = "0.9"
+rb-core = { path = "../core" }
+rtc = "0.21"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net"] }
+tokio-tungstenite = { version = "0.30", features = ["rustls-tls-native-roots"] }
+webrtc = "0.21"
+rb-signaling = { path = "../signaling", optional = true }
+jsonwebtoken = { version = "9", optional = true }
+
+[dev-dependencies]
+rb-media = { path = ".", features = ["testing"] }
+rb-core = { path = "../core", features = ["fakes"] }
+tokio = { version = "1", features = ["full", "test-util"] }
+env_logger = "0.11"
+
+[lints]
+workspace = true

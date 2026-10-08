@@ -2,6 +2,7 @@
 //!
 //! All traits are object-safe so the session manager can hold `Box<dyn …>`.
 
+mod clipboard;
 mod clock;
 mod hotkeys;
 mod input;
@@ -9,6 +10,7 @@ mod key_store;
 mod media;
 mod ui;
 
+pub use clipboard::Clipboard;
 pub use clock::{Clock, SystemClock};
 pub use hotkeys::{HotkeyEvent, HotkeyRegistration, Hotkeys};
 pub use input::InputInjector;

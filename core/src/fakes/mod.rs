@@ -4,6 +4,7 @@
 //! hand a clone to the code under test (as `Box<dyn Trait>`) and keep another
 //! to script inputs and inspect what happened.
 
+mod clipboard;
 mod clock;
 mod effects;
 mod host_api;
@@ -14,6 +15,7 @@ mod media;
 mod trace;
 mod ui;
 
+pub use clipboard::FakeClipboard;
 pub use clock::FakeClock;
 pub use effects::FakeEffects;
 pub use host_api::{FakeHostApi, Recorded, test_session};

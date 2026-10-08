@@ -13,8 +13,8 @@ use super::signing::{encode_signature, enroll_message, request_message};
 use super::transport::{HttpRequest, HttpResponse, Transport, TransportError};
 use super::types::{
     BannerReportRequest, BannerReportResponse, DecideRequest, DecideResponse, EnrollRequest,
-    EnrollResponse, HostPlatform, InviteRequest, InviteResponse, JwkBody, PollRequest,
-    PollResponse, SessionRequest, SessionResponse,
+    EnrollResponse, HostPlatform, InviteRequest, InviteResponse, JwkBody, MediaCredentialsRequest,
+    MediaCredentialsResponse, PollRequest, PollResponse, SessionRequest, SessionResponse,
 };
 use super::{DEFAULT_BASE_URL, PROTOCOL_VERSION, superjson};
 
@@ -207,6 +207,21 @@ impl<T: Transport> HostClient<T> {
     /// `host/session`: every session action.
     pub async fn session(&self, request: &SessionRequest) -> Result<SessionResponse, HostError> {
         self.signed("host/session", request).await
+    }
+
+    /// `host/media_credentials`: signaling token and ICE servers for a live
+    /// session. `503 MEDIA_UNCONFIGURED` until the website has the media services set up.
+    pub async fn media_credentials(
+        &self,
+        session_id: &str,
+    ) -> Result<MediaCredentialsResponse, HostError> {
+        self.signed(
+            "host/media_credentials",
+            &MediaCredentialsRequest {
+                session_id: session_id.to_owned(),
+            },
+        )
+        .await
     }
 
     /// `host/banner_report`: metadata only.

@@ -217,6 +217,12 @@ impl PermissionFilter {
         self.stats
     }
 
+    /// A binary frame arrived. The protocol is text JSON only, so it is
+    /// dropped and counted as malformed.
+    pub fn reject_binary(&mut self) {
+        self.stats.dropped_malformed += 1;
+    }
+
     /// `Some(message)` if allowed; `None` if dropped (and counted).
     pub fn check(&mut self, raw: &str) -> Option<ViewerMessage> {
         match decide(&self.grant, raw) {

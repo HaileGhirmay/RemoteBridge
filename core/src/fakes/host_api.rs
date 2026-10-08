@@ -5,8 +5,8 @@ use crate::Permissions;
 use crate::protocol::HostError;
 use crate::protocol::types::{
     BannerReportRequest, BannerReportResponse, DecideRequest, DecideResponse, Decision, DeviceView,
-    HostSessionView, InviteResponse, PolicyView, PollResponse, Requester, SessionAction,
-    SessionMode, SessionRequest, SessionResponse,
+    HostSessionView, InviteResponse, MediaCredentialsResponse, PolicyView, PollResponse, Requester,
+    SessionAction, SessionMode, SessionRequest, SessionResponse,
 };
 use crate::session::HostApi;
 use crate::traits::Clock;
@@ -33,6 +33,8 @@ struct State {
     poll_errors: VecDeque<HostError>,
     action_errors: VecDeque<HostError>,
     requests: Vec<Recorded>,
+    /// What `host/media_credentials` answers; `None` means 503 MEDIA_UNCONFIGURED.
+    media: Option<MediaCredentialsResponse>,
 }
 
 /// A small model of the control plane, enough to drive the session manager:
@@ -100,6 +102,7 @@ impl FakeHostApi {
                 poll_errors: VecDeque::new(),
                 action_errors: VecDeque::new(),
                 requests: Vec::new(),
+                media: None,
             })),
             clock,
             trace,
@@ -118,6 +121,11 @@ impl FakeHostApi {
 
     pub fn set_policy(&self, policy: PolicyView) {
         self.state.lock().unwrap().policy = policy;
+    }
+
+    /// What `host/media_credentials` should answer.
+    pub fn set_media_credentials(&self, credentials: Option<MediaCredentialsResponse>) {
+        self.state.lock().unwrap().media = credentials;
     }
 
     pub fn set_update_required(&self, on: bool) {
@@ -416,6 +424,36 @@ impl HostApi for FakeHostApi {
                     consent_expires_at: view.consent_expires_at,
                 })
             }
+        }
+    }
+
+    async fn media_credentials(
+        &self,
+        session_id: &str,
+    ) -> Result<MediaCredentialsResponse, HostError> {
+        self.trace
+            .push(format!("api:media_credentials:{session_id}"));
+        if let Some(e) = self.next_action_error() {
+            return Err(e);
+        }
+        let s = self.state.lock().unwrap();
+        let Some(view) = s.sessions.iter().find(|v| v.id == session_id) else {
+            return Err(api_error(404, "Session not found for this device"));
+        };
+        if view.state == "awaiting_approval" {
+            return Err(HostError::Api {
+                status: 409,
+                code: Some("SESSION_NOT_LIVE".into()),
+                message: format!("Session is {}", view.state),
+            });
+        }
+        match &s.media {
+            Some(creds) => Ok(creds.clone()),
+            None => Err(HostError::Api {
+                status: 503,
+                code: Some("MEDIA_UNCONFIGURED".into()),
+                message: "The media service isn't connected yet".into(),
+            }),
         }
     }
 

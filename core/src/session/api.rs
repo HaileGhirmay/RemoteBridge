@@ -2,7 +2,7 @@ use std::future::Future;
 
 use crate::protocol::types::{
     BannerReportRequest, BannerReportResponse, DecideRequest, DecideResponse, InviteResponse,
-    PollResponse, SessionRequest, SessionResponse,
+    MediaCredentialsResponse, PollResponse, SessionRequest, SessionResponse,
 };
 use crate::protocol::{HostClient, HostError, Transport};
 
@@ -23,6 +23,10 @@ pub trait HostApi: Send + Sync {
         &self,
         request: &BannerReportRequest,
     ) -> impl Future<Output = Result<BannerReportResponse, HostError>> + Send;
+    fn media_credentials(
+        &self,
+        session_id: &str,
+    ) -> impl Future<Output = Result<MediaCredentialsResponse, HostError>> + Send;
 }
 
 impl<T: Transport> HostApi for HostClient<T> {
@@ -47,5 +51,12 @@ impl<T: Transport> HostApi for HostClient<T> {
         request: &BannerReportRequest,
     ) -> Result<BannerReportResponse, HostError> {
         HostClient::banner_report(self, request).await
+    }
+
+    async fn media_credentials(
+        &self,
+        session_id: &str,
+    ) -> Result<MediaCredentialsResponse, HostError> {
+        HostClient::media_credentials(self, session_id).await
     }
 }

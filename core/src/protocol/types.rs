@@ -296,6 +296,38 @@ pub struct SessionResponse {
     pub consent_expires_at: Option<UnixMs>,
 }
 
+// ---- host/media_credentials ----------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaCredentialsRequest {
+    pub session_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IceServerView {
+    pub urls: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credential: Option<String>,
+}
+
+/// Answer of `host/media_credentials` (also `sessions/media_credentials`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaCredentialsResponse {
+    pub signaling_url: String,
+    pub signaling_token: String,
+    pub token_expires_at: UnixMs,
+    pub ice_servers: Vec<IceServerView>,
+    pub turn_available: bool,
+    pub relay_allowed: bool,
+    /// The DTLS fingerprint the viewer must present. `None` means the viewer
+    /// has not bound one yet; the host must not connect without it.
+    pub peer_fingerprint: Option<String>,
+}
+
 // ---- host/banner_report --------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -544,6 +576,41 @@ mod tests {
         assert_eq!(s.approval_expires_at, Some(1_791_463_118_897));
         assert_eq!(s.consent_expires_at, None);
         assert_eq!(s.viewer_fingerprint, None);
+    }
+
+    #[test]
+    fn decodes_media_credentials_including_an_unbound_viewer() {
+        let bound: MediaCredentialsResponse = superjson::decode(
+            br#"{"json":{"signalingUrl":"wss://s.example/ws","signalingToken":"a.b.c",
+                "tokenExpiresAt":"2026-10-08T12:38:38.897Z",
+                "iceServers":[{"urls":["stun:s.example:3478"]},
+                    {"urls":["turn:t.example:3478?transport=udp"],"username":"1:s","credential":"x"}],
+                "turnAvailable":true,"relayAllowed":true,
+                "peerFingerprint":"sha-256 AB:CD"},
+                "meta":{"values":{"tokenExpiresAt":["Date"]}}}"#,
+        )
+        .unwrap();
+        assert_eq!(bound.token_expires_at, 1_791_463_118_897);
+        assert_eq!(bound.ice_servers.len(), 2);
+        assert_eq!(bound.ice_servers[0].username, None);
+        assert_eq!(bound.ice_servers[1].username.as_deref(), Some("1:s"));
+        assert_eq!(bound.peer_fingerprint.as_deref(), Some("sha-256 AB:CD"));
+
+        // Viewer not bound yet: the host must refuse to connect without it.
+        let unbound: MediaCredentialsResponse = superjson::decode(
+            br#"{"json":{"signalingUrl":"wss://s.example/ws","signalingToken":"a.b.c",
+                "tokenExpiresAt":"2026-10-08T12:38:38.897Z","iceServers":[],
+                "turnAvailable":false,"relayAllowed":true,"peerFingerprint":null},
+                "meta":{"values":{"tokenExpiresAt":["Date"]}}}"#,
+        )
+        .unwrap();
+        assert_eq!(unbound.peer_fingerprint, None);
+        assert_eq!(
+            wire(&MediaCredentialsRequest {
+                session_id: "s".into()
+            }),
+            json!({"sessionId": "s"})
+        );
     }
 
     #[test]

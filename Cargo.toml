@@ -6,6 +6,8 @@ members = [
     "platform/macos/bridge",
     "tools/hostctl",
     "signaling",
+    "media",
+    "host",
 ]
 
 [workspace.package]

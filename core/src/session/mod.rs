@@ -16,6 +16,6 @@ pub use filter::{
     DropReason, FilterStats, PermissionFilter, ViewerMessage, allow_outgoing_clipboard,
 };
 pub use manager::{
-    HostSettings, InviteInfo, ManagerState, SessionManager, SessionSnapshot, unattended_escalation,
-    unattended_grant,
+    HostSettings, InviteInfo, ManagerState, MediaReport, SessionManager, SessionSnapshot,
+    unattended_escalation, unattended_grant,
 };

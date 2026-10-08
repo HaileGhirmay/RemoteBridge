@@ -22,8 +22,9 @@ use std::time::Duration;
 
 use crate::Permissions;
 use crate::protocol::types::{
-    DecideRequest, Decision, DeviceView, EndReason, FailureReason, HostSessionView, PolicyView,
-    PollResponse, SessionAction, SessionMode, SessionRequest, SessionState,
+    BannerReportRequest, DecideRequest, Decision, DeviceView, EndReason, FailureReason,
+    HostSessionView, MediaCredentialsResponse, PolicyView, PollResponse, SessionAction,
+    SessionMode, SessionRequest, SessionState,
 };
 use crate::protocol::{HostError, UnixMs};
 use crate::traits::{Clock, ConsentAnswer, ConsentPrompt, ConsentUi, KeyStore, Notice, PromptId};
@@ -62,6 +63,17 @@ pub enum ManagerState {
     Running,
     /// The server said `DEVICE_REVOKED`. The key is wiped; nothing runs.
     Revoked,
+}
+
+/// What the media layer tells the manager to pass on to the server.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MediaReport {
+    /// Media is flowing (again). `relay_used` is true if the selected path is a relay.
+    Connected {
+        relay_used: bool,
+    },
+    Reconnecting,
+    Failed(FailureReason),
 }
 
 /// A support code and when it stops working.
@@ -979,6 +991,59 @@ impl<A: HostApi> SessionManager<A> {
             _ => self.force_poll = true,
         }
         result
+    }
+
+    /// Show a notice (shortcut collision, the first-time hide message, missing
+    /// permissions) through the same local UI as the consent prompts.
+    pub fn notify(&mut self, notice: Notice) {
+        if let Ok(id) = self.ui.show(ConsentPrompt::Notice(notice)) {
+            self.prompts.insert(id, PromptKind::Notice);
+        }
+    }
+
+    /// `host/banner_report`, with revocation handled like every other call.
+    pub async fn banner_report(&mut self, request: &BannerReportRequest) -> Result<(), HostError> {
+        match self.api.banner_report(request).await {
+            Err(HostError::DeviceRevoked) => {
+                self.handle_revoked();
+                Err(HostError::DeviceRevoked)
+            }
+            other => other.map(|_| ()),
+        }
+    }
+
+    // ---- media ----------------------------------------------------------------
+
+    /// Credentials for a live session's media path (signaling token, ICE
+    /// servers, and the viewer fingerprint the server vouches for).
+    pub async fn media_credentials(
+        &mut self,
+        session_id: &str,
+    ) -> Result<MediaCredentialsResponse, HostError> {
+        match self.api.media_credentials(session_id).await {
+            Err(HostError::DeviceRevoked) => {
+                self.handle_revoked();
+                Err(HostError::DeviceRevoked)
+            }
+            other => other,
+        }
+    }
+
+    /// The media layer says something happened to a session. Reported to the
+    /// server on the next tick: `media_connected` (with whether a relay is
+    /// used), `reconnecting`, or `report_failure`.
+    pub fn report_media(&mut self, session_id: &str, report: MediaReport) {
+        // Only for sessions we still run: a late report for one that ended
+        // locally would only earn a 409.
+        if !self.sessions.iter().any(|t| t.view.id == session_id) {
+            return;
+        }
+        let action = match report {
+            MediaReport::Connected { relay_used } => SessionAction::MediaConnected { relay_used },
+            MediaReport::Reconnecting => SessionAction::Reconnecting,
+            MediaReport::Failed(reason) => SessionAction::ReportFailure { reason },
+        };
+        self.enqueue_session(session_id, action);
     }
 
     // ---- support code ---------------------------------------------------------

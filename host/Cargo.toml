@@ -1,0 +1,22 @@
+[package]
+name = "rb-host"
+description = "RemoteBridge host runtime: ties the session manager, indicators, media and platform adapters together."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+log = "0.4"
+rb-core = { path = "../core" }
+rb-media = { path = "../media" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+
+[dev-dependencies]
+rb-core = { path = "../core", features = ["fakes"] }
+rb-media = { path = "../media", features = ["testing"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full", "test-util"] }
+
+[lints]
+workspace = true

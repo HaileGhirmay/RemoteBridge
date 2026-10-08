@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use super::Trace;
 use crate::traits::{AudioCapture, Capture, MicCapture};
 use crate::types::{AudioChunk, DisplayId, DisplayInfo, FrameData, VideoFrame};
 use crate::{PlatformError, PlatformResult};
@@ -11,8 +12,13 @@ struct CaptureState {
     running: bool,
     start_error: Option<PlatformError>,
     frames: VecDeque<VideoFrame>,
+    /// When set, `next_frame` makes a frame of this size (about 30 per second)
+    /// whenever none is queued.
+    auto_frames: Option<(u32, u32)>,
+    generated: u64,
     starts: u32,
     stops: u32,
+    trace: Option<Trace>,
 }
 
 /// Scripted screen capture.
@@ -24,6 +30,14 @@ pub struct FakeCapture {
 impl FakeCapture {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Record `capture:start` and `capture:stop` in a shared trace, so a test
+    /// can assert the order against other components.
+    pub fn with_trace(trace: Trace) -> Self {
+        let capture = Self::default();
+        capture.state.lock().unwrap().trace = Some(trace);
+        capture
     }
 
     /// Queue a small solid frame for `next_frame`.
@@ -41,12 +55,42 @@ impl FakeCapture {
         self.state.lock().unwrap().start_error = err;
     }
 
+    /// Produce a `width` x `height` frame about 30 times a second while running.
+    pub fn set_auto_frames(&self, size: Option<(u32, u32)>) {
+        self.state.lock().unwrap().auto_frames = size;
+    }
+
     pub fn start_count(&self) -> u32 {
         self.state.lock().unwrap().starts
     }
 
     pub fn stop_count(&self) -> u32 {
         self.state.lock().unwrap().stops
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.state.lock().unwrap().running
+    }
+}
+
+fn generated_frame(width: u32, height: u32, n: u64) -> VideoFrame {
+    let shade = (n % 200) as u8;
+    let mut px = Vec::with_capacity((width * height * 4) as usize);
+    for y in 0..height {
+        for x in 0..width {
+            px.extend_from_slice(&[
+                shade.wrapping_add((x % 200) as u8),
+                (y % 200) as u8,
+                shade,
+                255,
+            ]);
+        }
+    }
+    VideoFrame {
+        width,
+        height,
+        timestamp_us: n * 33_000,
+        data: FrameData::Bgra(px),
     }
 }
 
@@ -72,11 +116,27 @@ impl Capture for FakeCapture {
     }
 
     fn next_frame(&mut self, _timeout: Duration) -> PlatformResult<Option<VideoFrame>> {
+        let auto = {
+            let mut s = self.state.lock().unwrap();
+            if !s.running {
+                return Err(PlatformError::NotStarted);
+            }
+            if let Some(frame) = s.frames.pop_front() {
+                return Ok(Some(frame));
+            }
+            s.auto_frames
+        };
+        let Some((w, h)) = auto else {
+            return Ok(None);
+        };
+        // Pace like a real display, outside the lock so `stop()` is not held up.
+        std::thread::sleep(Duration::from_millis(33));
         let mut s = self.state.lock().unwrap();
         if !s.running {
             return Err(PlatformError::NotStarted);
         }
-        Ok(s.frames.pop_front())
+        s.generated += 1;
+        Ok(Some(generated_frame(w, h, s.generated)))
     }
 
     fn is_running(&self) -> bool {
@@ -85,6 +145,11 @@ impl Capture for FakeCapture {
 
     fn stop(&mut self) {
         let mut s = self.state.lock().unwrap();
+        if s.running
+            && let Some(trace) = &s.trace
+        {
+            trace.push("capture:stop");
+        }
         s.running = false;
         s.stops += 1;
     }
@@ -95,6 +160,8 @@ struct AudioState {
     running: bool,
     start_error: Option<PlatformError>,
     chunks: VecDeque<AudioChunk>,
+    /// When set, `next_chunk` makes a 20 ms silent chunk whenever none is queued.
+    auto_chunks: bool,
     starts: u32,
     stops: u32,
 }
@@ -126,6 +193,11 @@ macro_rules! fake_audio {
                 self.state.lock().unwrap().start_error = err;
             }
 
+            /// Produce a 20 ms silent chunk every 20 ms while running.
+            pub fn set_auto_chunks(&self, on: bool) {
+                self.state.lock().unwrap().auto_chunks = on;
+            }
+
             pub fn start_count(&self) -> u32 {
                 self.state.lock().unwrap().starts
             }
@@ -147,11 +219,29 @@ macro_rules! fake_audio {
             }
 
             fn next_chunk(&mut self, _timeout: Duration) -> PlatformResult<Option<AudioChunk>> {
-                let mut s = self.state.lock().unwrap();
-                if !s.running {
+                let auto = {
+                    let mut s = self.state.lock().unwrap();
+                    if !s.running {
+                        return Err(PlatformError::NotStarted);
+                    }
+                    if let Some(chunk) = s.chunks.pop_front() {
+                        return Ok(Some(chunk));
+                    }
+                    s.auto_chunks
+                };
+                if !auto {
+                    return Ok(None);
+                }
+                std::thread::sleep(Duration::from_millis(20));
+                if !self.state.lock().unwrap().running {
                     return Err(PlatformError::NotStarted);
                 }
-                Ok(s.chunks.pop_front())
+                Ok(Some(AudioChunk {
+                    sample_rate: 48_000,
+                    channels: 2,
+                    timestamp_us: 0,
+                    samples: vec![0; 960 * 2],
+                }))
             }
 
             fn is_running(&self) -> bool {

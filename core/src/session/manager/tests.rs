@@ -1109,6 +1109,135 @@ async fn answers_to_withdrawn_prompts_are_ignored() {
     assert!(r.api.decides().is_empty());
 }
 
+// ---- media ------------------------------------------------------------------------------------
+
+fn media_creds() -> MediaCredentialsResponse {
+    MediaCredentialsResponse {
+        signaling_url: "wss://signal.example.com/ws".into(),
+        signaling_token: "a.b.c".into(),
+        token_expires_at: T0 + 300_000,
+        ice_servers: vec![crate::protocol::types::IceServerView {
+            urls: vec!["turn:turn.example.com:3478?transport=udp".into()],
+            username: Some("1791463118:s1".into()),
+            credential: Some("c2VjcmV0".into()),
+        }],
+        turn_available: true,
+        relay_allowed: true,
+        peer_fingerprint: Some(format!("sha-256 {}", vec!["AB"; 32].join(":"))),
+    }
+}
+
+#[tokio::test]
+async fn media_credentials_come_from_the_server_for_a_live_session_only() {
+    let mut r = Rig::new();
+    r.api.set_media_credentials(Some(media_creds()));
+
+    // Still waiting for approval: not live yet.
+    r.api.add_request(test_session("s1", Attended, CONTROL), 5);
+    r.run(45).await;
+    assert!(matches!(
+        r.mgr.media_credentials("s1").await,
+        Err(HostError::Api { status: 409, .. })
+    ));
+
+    let pid = r.attended_prompts()[0].0;
+    r.ui.answer(pid, approve(CONTROL, 30));
+    r.tick().await;
+    let creds = r.mgr.media_credentials("s1").await.unwrap();
+    assert_eq!(creds, media_creds());
+    assert!(r.trace.position("api:media_credentials:s1").is_some());
+}
+
+#[tokio::test]
+async fn unconfigured_media_is_reported_as_such_and_unknown_sessions_as_404() {
+    let mut r = Rig::new();
+    r.live_attended("s1", CONTROL, CONTROL).await;
+    match r.mgr.media_credentials("s1").await {
+        Err(HostError::Api {
+            status: 503, code, ..
+        }) => {
+            assert_eq!(code.as_deref(), Some("MEDIA_UNCONFIGURED"));
+        }
+        other => panic!("expected 503, got {other:?}"),
+    }
+    r.api.set_media_credentials(Some(media_creds()));
+    assert!(matches!(
+        r.mgr.media_credentials("nope").await,
+        Err(HostError::Api { status: 404, .. })
+    ));
+}
+
+#[tokio::test]
+async fn device_revoked_while_fetching_media_credentials_is_handled() {
+    let mut r = Rig::new();
+    r.live_attended("s1", CONTROL, CONTROL).await;
+    r.api.fail_next_action(HostError::DeviceRevoked);
+    assert_eq!(
+        r.mgr.media_credentials("s1").await.unwrap_err(),
+        HostError::DeviceRevoked
+    );
+    assert_eq!(r.mgr.state(), ManagerState::Revoked);
+    assert!(r.effects.running().is_empty());
+}
+
+#[tokio::test]
+async fn media_reports_become_session_actions() {
+    let mut r = Rig::new();
+    r.live_attended("s1", CONTROL, CONTROL).await;
+
+    r.mgr
+        .report_media("s1", MediaReport::Connected { relay_used: true });
+    r.tick().await;
+    assert_eq!(
+        r.api.sessions_sent().last().unwrap().action,
+        SessionAction::MediaConnected { relay_used: true }
+    );
+    assert_eq!(r.api.session_view("s1").unwrap().state, "active");
+
+    r.mgr.report_media("s1", MediaReport::Reconnecting);
+    r.tick().await;
+    assert_eq!(
+        r.api.sessions_sent().last().unwrap().action,
+        SessionAction::Reconnecting
+    );
+    assert_eq!(r.api.session_view("s1").unwrap().state, "reconnecting");
+
+    r.mgr
+        .report_media("s1", MediaReport::Connected { relay_used: false });
+    r.tick().await;
+    assert_eq!(r.api.session_view("s1").unwrap().state, "active", "resumed");
+
+    r.mgr
+        .report_media("s1", MediaReport::Failed(FailureReason::IceFailure));
+    r.tick().await;
+    assert_eq!(
+        r.api.sessions_sent().last().unwrap().action,
+        SessionAction::ReportFailure {
+            reason: FailureReason::IceFailure
+        }
+    );
+    // The server ended it; the next poll stops everything.
+    r.run(15).await;
+    assert!(!r.effects.is_running("s1"));
+}
+
+#[tokio::test]
+async fn media_reports_for_unknown_or_ended_sessions_are_ignored() {
+    let mut r = Rig::new();
+    r.mgr
+        .report_media("ghost", MediaReport::Connected { relay_used: false });
+    r.live_attended("s1", CONTROL, CONTROL).await;
+    r.mgr.end_session("s1", EndReason::HostStop).await.unwrap();
+    let sent = r.api.sessions_sent().len();
+    r.mgr.report_media("s1", MediaReport::Reconnecting);
+    r.run(15).await;
+    assert_eq!(
+        r.api.sessions_sent().len(),
+        sent,
+        "nothing more is sent for an ended session"
+    );
+}
+
 // ---- observation ----------------------------------------------------------------------------
 
 #[tokio::test]
