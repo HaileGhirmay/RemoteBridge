@@ -1,0 +1,35 @@
+# TURN relay + signaling relay on one small VM.
+#
+#   export TURN_SHARED_SECRET="$(openssl rand -base64 48)"       # give the same value to the website
+#   export SIGNALING_JWT_SECRET="$(openssl rand -base64 48)"     # and this one too
+#   docker compose up -d
+#
+# Put TLS certificates for turn.example.com in ./tls (fullchain.pem, privkey.pem).
+# The signaling server speaks plain HTTP on 127.0.0.1:8080: terminate TLS in
+# front of it (Caddy, nginx, or your cloud load balancer) and expose it as
+# wss://signal.example.com/ws.
+services:
+  coturn:
+    image: coturn/coturn:4.6
+    network_mode: host            # a TURN server needs the real network (relay port range)
+    restart: unless-stopped
+    command:
+      - "-c"
+      - "/etc/coturn/turnserver.conf"
+      - "--static-auth-secret=${TURN_SHARED_SECRET:?set TURN_SHARED_SECRET}"
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+      - ./tls:/etc/coturn/tls:ro
+
+  signaling:
+    build:
+      context: ../..
+      dockerfile: signaling/Dockerfile
+    restart: unless-stopped
+    environment:
+      SIGNALING_JWT_SECRET: "${SIGNALING_JWT_SECRET:?set SIGNALING_JWT_SECRET}"
+      BIND: "0.0.0.0"
+      PORT: "8080"
+      RUST_LOG: "info"
+    ports:
+      - "127.0.0.1:8080:8080"

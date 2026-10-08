@@ -1,0 +1,5 @@
+target
+.git
+**/*.devkey
+**/.build
+**/.swiftpm

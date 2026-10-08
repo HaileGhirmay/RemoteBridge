@@ -15,6 +15,6 @@ pub use input::InputInjector;
 pub use key_store::KeyStore;
 pub use media::{AudioCapture, Capture, MicCapture};
 pub use ui::{
-    Banner, BannerAction, BannerContent, ConsentAnswer, ConsentPrompt, ConsentUi, Notice, PromptId,
-    Tray, TrayAction, TrayModel,
+    Banner, BannerAction, BannerContent, ConsentAnswer, ConsentPrompt, ConsentUi, HideChoice,
+    Notice, PromptId, Tray, TrayAction, TrayModel,
 };

@@ -1,0 +1,30 @@
+# Fly.io example. Replace the app name and region, then, from the REPOSITORY
+# ROOT (the Docker build context must contain the whole workspace):
+#   fly launch --no-deploy --copy-config --config signaling/fly.toml --dockerfile signaling/Dockerfile
+#   fly secrets set --config signaling/fly.toml SIGNALING_JWT_SECRET="$(openssl rand -base64 48)"
+#   fly deploy --config signaling/fly.toml --dockerfile signaling/Dockerfile
+# Fly terminates TLS, so clients connect to wss://<app>.fly.dev/ws
+app = "remotebridge-signaling"
+primary_region = "fra"
+
+[env]
+  PORT = "8080"
+  RUST_LOG = "info"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"   # sessions are long-lived WebSockets
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/healthz"
+    interval = "15s"
+    timeout = "3s"
+    grace_period = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

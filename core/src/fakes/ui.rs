@@ -167,7 +167,7 @@ impl Tray for FakeTray {
 mod tests {
     use super::*;
     use crate::Permissions;
-    use crate::traits::Notice;
+    use crate::traits::{HideChoice, Notice};
 
     fn attended() -> ConsentPrompt {
         ConsentPrompt::AttendedRequest {
@@ -223,8 +223,11 @@ mod tests {
         banner.show(&content).unwrap();
         assert!(banner.is_visible());
         assert_eq!(banner_probe.content(), Some(content));
-        banner_probe.click(BannerAction::Hide);
-        assert_eq!(banner.poll_action(), Some(BannerAction::Hide));
+        banner_probe.click(BannerAction::Hide(HideChoice::Minutes(60)));
+        assert_eq!(
+            banner.poll_action(),
+            Some(BannerAction::Hide(HideChoice::Minutes(60)))
+        );
         banner.hide();
         assert!(!banner.is_visible());
 

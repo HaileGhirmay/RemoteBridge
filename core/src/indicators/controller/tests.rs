@@ -295,6 +295,48 @@ fn the_restore_shortcut_brings_them_back_and_reports_user_show_now() {
 }
 
 #[test]
+fn the_hide_menu_on_the_banner_maps_to_the_right_dismissal() {
+    for (choice, expect_minutes) in [
+        (HideChoice::Minutes(30), 30),
+        (HideChoice::Minutes(60), 60),
+        (HideChoice::Minutes(120), 120),
+        (HideChoice::Minutes(240), 240),
+        (HideChoice::Minutes(480), 480),
+        (HideChoice::UntilSessionEnd, 180),
+    ] {
+        let (mut r, _) = Rig::with_session(Attended);
+        let (outcome, intent) =
+            r.c.handle_banner_action(BannerAction::Hide(choice))
+                .unwrap();
+        assert_eq!(intent, IndicatorIntent::None);
+        assert_eq!(outcome.unwrap().scope, Scope::All);
+        assert!(!r.c.banner_visible() && !r.c.tray_visible());
+        let events = r.c.take_events();
+        assert!(matches!(
+            events.last(),
+            Some(IndicatorEvent::Dismissed { duration_minutes, .. }) if *duration_minutes == expect_minutes
+        ));
+    }
+
+    // An unsupported length from a buggy UI is refused, not guessed at.
+    let (mut r, _) = Rig::with_session(Attended);
+    assert_eq!(
+        r.c.handle_banner_action(BannerAction::Hide(HideChoice::Minutes(45)))
+            .map(|_| ()),
+        Err(HideError::UnsupportedDuration)
+    );
+    assert!(r.c.banner_visible());
+}
+
+#[test]
+fn the_banner_disconnect_button_is_an_emergency_disconnect() {
+    let (mut r, _) = hidden_attended();
+    let (outcome, intent) = r.c.handle_banner_action(BannerAction::Disconnect).unwrap();
+    assert!(outcome.is_none());
+    assert_eq!(intent, IndicatorIntent::EmergencyDisconnect);
+}
+
+#[test]
 fn the_tray_menu_is_a_fallback_for_both_shortcuts() {
     let (mut r, _) = hidden_attended();
     assert_eq!(

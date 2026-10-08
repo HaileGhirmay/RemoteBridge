@@ -5,6 +5,7 @@ members = [
     "platform/windows",
     "platform/macos/bridge",
     "tools/hostctl",
+    "signaling",
 ]
 
 [workspace.package]

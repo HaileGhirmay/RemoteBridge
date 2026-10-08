@@ -74,10 +74,18 @@ pub struct BannerContent {
     pub granted: Permissions,
 }
 
+/// What the user picked from the banner's "Hide…" menu.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HideChoice {
+    /// 30 / 60 / 120 / 240 / 480 minutes.
+    Minutes(u32),
+    UntilSessionEnd,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BannerAction {
-    /// The user pressed "Hide…".
-    Hide,
+    /// The user chose how long to hide the indicators from "Hide…".
+    Hide(HideChoice),
     Disconnect,
 }
 

@@ -9,11 +9,15 @@
 mod hotkeys;
 #[cfg(windows)]
 mod key_store;
+#[cfg(windows)]
+mod ui;
 
 #[cfg(windows)]
 pub use hotkeys::WindowsHotkeys;
 #[cfg(windows)]
 pub use key_store::{KeyBackend, KeyScope, ProviderPreference, WindowsKeyStore};
+#[cfg(windows)]
+pub use ui::{WindowsBanner, WindowsTray, WindowsUi};
 
 /// Short name used in logs and diagnostics.
 pub const PLATFORM_NAME: &str = "windows";

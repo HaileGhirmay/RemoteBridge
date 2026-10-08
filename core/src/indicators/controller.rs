@@ -19,7 +19,10 @@ use crate::protocol::types::{
     BannerEvent, BannerEventType, BannerReason, BannerReportRequest, BannerScope,
 };
 use crate::session::SessionSnapshot;
-use crate::traits::{Banner, BannerContent, Clock, HotkeyEvent, Tray, TrayAction, TrayModel};
+use crate::traits::{
+    Banner, BannerAction, BannerContent, Clock, HideChoice, HotkeyEvent, Tray, TrayAction,
+    TrayModel,
+};
 
 use super::timer::{
     self, Context, DismissError, Dismissal, Evaluation, RestoreReason, Scope, persist, restore,
@@ -410,6 +413,24 @@ impl IndicatorController {
         self.last = Some(timer::evaluate(None, &ctx));
         self.events.push(event.clone());
         vec![event]
+    }
+
+    /// A button on the banner. "Hide…" carries the length the local user chose.
+    /// Returns what happened for the "hide" case so the caller can show the
+    /// one-time notice, and the intent for "Disconnect".
+    pub fn handle_banner_action(
+        &mut self,
+        action: BannerAction,
+    ) -> Result<(Option<HideOutcome>, IndicatorIntent), HideError> {
+        match action {
+            BannerAction::Hide(HideChoice::Minutes(m)) => {
+                Ok((Some(self.hide_for(m)?), IndicatorIntent::None))
+            }
+            BannerAction::Hide(HideChoice::UntilSessionEnd) => {
+                Ok((Some(self.hide_until_end()?), IndicatorIntent::None))
+            }
+            BannerAction::Disconnect => Ok((None, IndicatorIntent::EmergencyDisconnect)),
+        }
     }
 
     /// A physical-keyboard shortcut. Only the hotkey layer calls this, and it
