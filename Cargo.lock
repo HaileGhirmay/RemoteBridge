@@ -2104,6 +2104,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "rb-host-app"
+version = "0.1.0"
+dependencies = [
+ "env_logger",
+ "log",
+ "rb-core",
+ "rb-host",
+ "rb-media",
+ "rb-platform-windows",
+ "tokio",
+]
+
+[[package]]
 name = "rb-hostctl"
 version = "0.1.0"
 dependencies = [

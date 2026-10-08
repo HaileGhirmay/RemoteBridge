@@ -1,0 +1,110 @@
+//! The one piece of state the host keeps outside the key store: which device
+//! id the server gave this PC at enrollment.
+//!
+//! The key itself lives in the hardware-backed key store, never in this file.
+
+use std::fs;
+use std::io;
+use std::path::{Path, PathBuf};
+
+/// `device-id.txt` next to the other RemoteBridge data.
+pub fn default_path() -> PathBuf {
+    let base = std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."));
+    base.join("RemoteBridge").join("device-id.txt")
+}
+
+/// Load the enrolled device id. `Ok(None)` when the file is absent.
+pub fn load(path: &Path) -> io::Result<Option<String>> {
+    match fs::read_to_string(path) {
+        Ok(text) => {
+            let id = text.trim();
+            if is_device_id(id) {
+                Ok(Some(id.to_owned()))
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("{} does not hold a device id", path.display()),
+                ))
+            }
+        }
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+/// Save the device id, creating the folder if needed.
+pub fn save(path: &Path, device_id: &str) -> io::Result<()> {
+    if !is_device_id(device_id) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "device id must be a UUID",
+        ));
+    }
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir)?;
+    }
+    fs::write(path, format!("{device_id}\n"))
+}
+
+/// Canonical UUID shape: 8-4-4-4-12 hex digits.
+pub fn is_device_id(text: &str) -> bool {
+    let groups: Vec<&str> = text.split('-').collect();
+    let lengths = [8, 4, 4, 4, 12];
+    groups.len() == lengths.len()
+        && groups
+            .iter()
+            .zip(lengths)
+            .all(|(g, n)| g.len() == n && g.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const ID: &str = "b272579b-39b9-49e6-8cfe-f002a0944821";
+
+    fn temp_file(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("rb-host-state-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(name);
+        let _ = fs::remove_file(&path);
+        path
+    }
+
+    #[test]
+    fn a_missing_file_means_not_enrolled() {
+        let path = temp_file("missing.txt");
+        assert_eq!(load(&path).unwrap(), None);
+    }
+
+    #[test]
+    fn the_device_id_round_trips() {
+        let path = temp_file("round.txt");
+        save(&path, ID).unwrap();
+        assert_eq!(load(&path).unwrap().as_deref(), Some(ID));
+    }
+
+    #[test]
+    fn a_damaged_file_is_an_error_not_a_silent_reenrollment() {
+        let path = temp_file("damaged.txt");
+        fs::write(&path, "not-a-device-id\n").unwrap();
+        assert_eq!(load(&path).unwrap_err().kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn only_uuid_shaped_ids_are_saved() {
+        let path = temp_file("refused.txt");
+        assert!(save(&path, "../../etc/passwd").is_err());
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn uuid_shape_is_checked_exactly() {
+        assert!(is_device_id(ID));
+        assert!(!is_device_id("b272579b39b949e68cfef002a0944821"));
+        assert!(!is_device_id("b272579b-39b9-49e6-8cfe-f002a094482"));
+        assert!(!is_device_id("g272579b-39b9-49e6-8cfe-f002a0944821"));
+    }
+}

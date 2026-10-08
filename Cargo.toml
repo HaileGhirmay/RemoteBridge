@@ -9,6 +9,7 @@ members = [
     "media",
     "host",
     "tools/native-host",
+    "tools/rb-host",
 ]
 
 [workspace.package]
