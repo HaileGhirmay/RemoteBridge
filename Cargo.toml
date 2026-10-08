@@ -8,6 +8,7 @@ members = [
     "signaling",
     "media",
     "host",
+    "tools/native-host",
 ]
 
 [workspace.package]

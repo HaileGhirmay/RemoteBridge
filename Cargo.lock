@@ -2140,6 +2140,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "rb-native-host"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "rb-platform-macos-bridge"
 version = "0.1.0"
 dependencies = [

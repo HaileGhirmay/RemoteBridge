@@ -1,0 +1,120 @@
+/* Calm control room: warm paper, slate-teal primary, amber only for live state. */
+:root {
+  color-scheme: light dark;
+  --paper: #f7f5ef;
+  --ink: #1d2428;
+  --muted: #5d6a70;
+  --rule: #d9d5ca;
+  --primary: #2d5f63;
+  --primary-ink: #ffffff;
+  --signal: #b7791f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #151b1f;
+    --ink: #eef1ef;
+    --muted: #9aa7ad;
+    --rule: #2c373d;
+    --primary: #5b9a9e;
+    --primary-ink: #0d1518;
+    --signal: #e0a040;
+  }
+}
+
+body {
+  margin: 0;
+  width: 300px;
+  padding: 12px 14px;
+  background: var(--paper);
+  color: var(--ink);
+  font: 13px/1.45 "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+}
+
+h1 {
+  margin: 0;
+  font: 600 16px/1.2 Newsreader, Georgia, serif;
+}
+
+h2 {
+  margin: 14px 0 6px;
+  font: 600 12px/1.2 "IBM Plex Sans", system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+header,
+section,
+footer {
+  border-top: 1px solid var(--rule);
+  padding: 10px 0;
+}
+
+header {
+  border-top: none;
+  padding-top: 0;
+}
+
+.muted {
+  margin: 2px 0 0;
+  color: var(--muted);
+}
+
+button {
+  font: inherit;
+  padding: 6px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  margin: 4px 4px 0 0;
+}
+
+button.primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+}
+
+button.link {
+  border: none;
+  padding: 2px 0;
+  color: var(--primary);
+}
+
+button[hidden],
+section[hidden],
+footer button[hidden] {
+  display: none;
+}
+
+.devices {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.devices li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.status {
+  font: 500 11px/1 "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.status.live {
+  color: var(--signal);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+}

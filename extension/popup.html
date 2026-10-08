@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'" />
+    <title>RemoteBridge</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>RemoteBridge</h1>
+      <p id="account" class="muted">Checking your account…</p>
+    </header>
+
+    <section id="signin" hidden>
+      <button id="signin-btn" class="primary" type="button">Sign in on the website</button>
+    </section>
+
+    <section>
+      <h2>Devices</h2>
+      <ul id="devices" class="devices"></ul>
+      <button id="devices-link" class="link" type="button">Manage devices</button>
+    </section>
+
+    <section class="actions">
+      <button id="support" class="primary" type="button">Get support</button>
+      <button id="connect" type="button">Connect to my device</button>
+    </section>
+
+    <footer>
+      <p id="native" class="muted">Checking the host app…</p>
+      <button id="open-host" type="button" hidden>Open host window</button>
+      <button id="download-host" class="link" type="button" hidden>Get the host app</button>
+    </footer>
+
+    <script type="module" src="src/popup.js"></script>
+  </body>
+</html>

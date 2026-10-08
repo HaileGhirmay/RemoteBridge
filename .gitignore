@@ -6,3 +6,7 @@
 .DS_Store
 # Dev-only software key used by rb-hostctl (Prompt 02). Never commit.
 *.devkey
+
+# Packaged extension and other build output.
+/dist
+
