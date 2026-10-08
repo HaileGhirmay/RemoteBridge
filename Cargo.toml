@@ -4,6 +4,7 @@ members = [
     "core",
     "platform/windows",
     "platform/macos/bridge",
+    "tools/hostctl",
 ]
 
 [workspace.package]

@@ -1,0 +1,30 @@
+[package]
+name = "rb-hostctl"
+description = "Developer CLI for exercising RA-HOST-V1 against a RemoteBridge server. Uses a file-based software key; not for end users."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+# The file-based software key. Required to build the binary: it is for
+# development only and must never ship in the real host.
+dev-key = ["dep:p256", "dep:base64", "dep:getrandom"]
+
+[[bin]]
+name = "rb-hostctl"
+path = "src/main.rs"
+required-features = ["dev-key"]
+
+[dependencies]
+rb-core = { path = "../../core" }
+clap = { version = "4", features = ["derive", "env"] }
+serde ={ version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt", "macros", "time"] }
+base64 = { version = "0.23.1", optional = true }
+getrandom = { version = "0.4.3", optional = true }
+p256 = { version = "0.14.0", features = ["ecdsa"], optional = true }
+
+[lints]
+workspace = true

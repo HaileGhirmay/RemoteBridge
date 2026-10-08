@@ -1,0 +1,38 @@
+{
+  "json": {
+    "serverTime": "2026-10-08T12:33:38.897Z",
+    "updateRequired": false,
+    "minProtocolVersion": 1,
+    "device": { "id": "6f1c3d7e-2b4a-4c8e-9d10-0a1b2c3d4e5f", "name": "Office PC", "unattendedEnabled": false },
+    "policy": {
+      "consentRenewalMinutes": 30,
+      "maxSessionMinutes": 480,
+      "allowControlUnattended": false,
+      "allowAudioUnattended": false
+    },
+    "pending": [
+      {
+        "id": "a2b4c6d8-1111-4222-8333-444455556666",
+        "mode": "attended",
+        "state": "awaiting_approval",
+        "requester": { "email": "sam@example.com", "displayName": "Sam Helper", "verified": true },
+        "requestedPermissions": { "control": true, "systemAudio": false, "microphone": false, "clipboard": false },
+        "grantedPermissions": { "control": false, "systemAudio": false, "microphone": false, "clipboard": false },
+        "pendingPermissions": null,
+        "approvalExpiresAt": "2026-10-08T12:38:38.897Z",
+        "consentExpiresAt": null,
+        "maxEndsAt": null,
+        "leaseExpiresAt": null,
+        "startedAt": null,
+        "viewerFingerprint": null
+      }
+    ],
+    "live": []
+  },
+  "meta": {
+    "values": {
+      "serverTime": ["Date"],
+      "pending.0.approvalExpiresAt": ["Date"]
+    }
+  }
+}

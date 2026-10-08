@@ -1,7 +1,11 @@
 //! Plain data types shared by the platform traits and the core logic.
 
+use serde::{Deserialize, Serialize};
+
 /// The four separately opt-in permissions. View is implicit and always on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+/// Serialized as `{control, systemAudio, microphone, clipboard}`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Permissions {
     pub control: bool,
     pub system_audio: bool,
