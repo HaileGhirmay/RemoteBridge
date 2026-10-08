@@ -1,0 +1,8 @@
+/target
+**/*.rs.bk
+.build/
+.swiftpm/
+*.log
+.DS_Store
+# Dev-only software key used by rb-hostctl (Prompt 02). Never commit.
+*.devkey

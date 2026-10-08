@@ -1,0 +1,17 @@
+[package]
+name = "rb-platform-macos-bridge"
+description = "C ABI bridge between the RemoteBridge Rust core and the macOS Swift app."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "rb_macos_bridge"
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+rb-core = { path = "../../../core" }
+
+[lints]
+workspace = true

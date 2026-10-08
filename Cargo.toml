@@ -1,0 +1,16 @@
+[workspace]
+resolver = "3"
+members = [
+    "core",
+    "platform/windows",
+    "platform/macos/bridge",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "UNLICENSED"
+publish = false
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"

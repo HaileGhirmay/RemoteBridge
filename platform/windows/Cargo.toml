@@ -1,0 +1,13 @@
+[package]
+name = "rb-platform-windows"
+description = "RemoteBridge platform adapters for Windows 11."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+rb-core = { path = "../../core" }
+
+[lints]
+workspace = true
