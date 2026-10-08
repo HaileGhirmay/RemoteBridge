@@ -6,8 +6,12 @@
 //! `Capture`/`AudioCapture`/`MicCapture`/`InputInjector` in Prompt 10.
 
 #[cfg(windows)]
+mod hotkeys;
+#[cfg(windows)]
 mod key_store;
 
+#[cfg(windows)]
+pub use hotkeys::WindowsHotkeys;
 #[cfg(windows)]
 pub use key_store::{KeyBackend, KeyScope, ProviderPreference, WindowsKeyStore};
 

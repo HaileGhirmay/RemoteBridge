@@ -5,17 +5,23 @@
 //! to script inputs and inspect what happened.
 
 mod clock;
+mod effects;
+mod host_api;
 mod hotkeys;
 mod input;
 mod key_store;
 mod media;
+mod trace;
 mod ui;
 
 pub use clock::FakeClock;
+pub use effects::FakeEffects;
+pub use host_api::{FakeHostApi, Recorded, test_session};
 pub use hotkeys::FakeHotkeys;
 pub use input::{FakeInputInjector, InputCall};
 pub use key_store::FakeKeyStore;
 pub use media::{FakeAudioCapture, FakeCapture, FakeMicCapture};
+pub use trace::Trace;
 pub use ui::{FakeBanner, FakeConsentUi, FakeTray};
 
 #[cfg(test)]
@@ -36,5 +42,6 @@ mod tests {
         let _: Box<dyn Banner> = Box::new(FakeBanner::new());
         let _: Box<dyn Hotkeys> = Box::new(FakeHotkeys::new());
         let _: Box<dyn ConsentUi> = Box::new(FakeConsentUi::new());
+        let _: Box<dyn crate::session::SessionEffects> = Box::new(FakeEffects::new());
     }
 }

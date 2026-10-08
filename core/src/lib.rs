@@ -6,7 +6,9 @@
 //! fakes in [`fakes`] and a fake clock.
 
 pub mod error;
+pub mod indicators;
 pub mod protocol;
+pub mod session;
 pub mod traits;
 pub mod types;
 

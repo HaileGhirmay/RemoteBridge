@@ -43,6 +43,26 @@ impl Permissions {
     pub fn any(&self) -> bool {
         self.control || self.system_audio || self.microphone || self.clipboard
     }
+
+    /// Permissions set in either.
+    pub fn union(&self, other: &Self) -> Self {
+        Self {
+            control: self.control || other.control,
+            system_audio: self.system_audio || other.system_audio,
+            microphone: self.microphone || other.microphone,
+            clipboard: self.clipboard || other.clipboard,
+        }
+    }
+
+    /// Permissions set in both.
+    pub fn intersect(&self, other: &Self) -> Self {
+        Self {
+            control: self.control && other.control,
+            system_audio: self.system_audio && other.system_audio,
+            microphone: self.microphone && other.microphone,
+            clipboard: self.clipboard && other.clipboard,
+        }
+    }
 }
 
 /// Public half of the device key, as JWK coordinates (base64url, 32 bytes each).
@@ -141,6 +161,14 @@ mod tests {
         assert!(CONTROL.is_subset_of(&CONTROL_AND_CLIPBOARD));
         assert!(!CONTROL_AND_CLIPBOARD.is_subset_of(&CONTROL));
         assert!(!CONTROL.is_subset_of(&VIEW_ONLY));
+    }
+
+    #[test]
+    fn union_and_intersect() {
+        assert_eq!(CONTROL.union(&CONTROL_AND_CLIPBOARD), CONTROL_AND_CLIPBOARD);
+        assert_eq!(VIEW_ONLY.union(&CONTROL), CONTROL);
+        assert_eq!(CONTROL_AND_CLIPBOARD.intersect(&CONTROL), CONTROL);
+        assert_eq!(CONTROL.intersect(&VIEW_ONLY), VIEW_ONLY);
     }
 
     #[test]
