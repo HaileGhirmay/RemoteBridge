@@ -1,0 +1,25 @@
+[package]
+name = "rb-host-app"
+description = "RemoteBridge host for Windows 11: the rb-host.exe that enrolls the PC and serves sessions."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "rb-host"
+path = "src/main.rs"
+
+[dependencies]
+env_logger = "0.11"
+log = "0.4"
+rb-core = { path = "../../core" }
+rb-host = { path = "../../host" }
+rb-media = { path = "../../media", features = ["libopus"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "sync"] }
+
+[target."cfg(windows)".dependencies]
+rb-platform-windows = { path = "../../platform/windows" }
+
+[lints]
+workspace = true

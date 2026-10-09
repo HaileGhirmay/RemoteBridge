@@ -7,6 +7,8 @@
 pub mod audio;
 pub mod error;
 pub mod fingerprint;
+#[cfg(feature = "libopus")]
+pub mod opus_encoder;
 pub mod peer;
 pub mod signaling;
 #[cfg(feature = "testing")]

@@ -3,15 +3,21 @@
 //! Compiles on every OS so the workspace builds everywhere, but the adapters
 //! themselves are Windows-only. Done: `KeyStore` (CNG, TPM when available),
 //! `Hotkeys` (RegisterHotKey plus a low-level hook), `Tray`/`Banner`
-//! (per-display windows, excluded from capture), and remote input (`SendInput`
-//! with scan codes). To come: capture and system audio (Prompt 10).
+//! (per-display windows, excluded from capture), remote input (`SendInput`
+//! with scan codes), screen capture, system audio and microphone, the
+//! approval dialogs (`ConsentUi`, view-only in this version) and the text
+//! clipboard.
 
+pub mod clipboard;
 pub mod keymap;
+pub mod prompt;
 
 #[cfg(windows)]
 mod audio;
 #[cfg(windows)]
 mod capture;
+#[cfg(windows)]
+mod consent;
 #[cfg(windows)]
 mod hotkeys;
 #[cfg(windows)]
@@ -25,6 +31,10 @@ mod ui;
 pub use audio::{Microphone, SystemAudio};
 #[cfg(windows)]
 pub use capture::DxgiCapture;
+#[cfg(windows)]
+pub use clipboard::WindowsClipboard;
+#[cfg(windows)]
+pub use consent::WindowsConsent;
 #[cfg(windows)]
 pub use hotkeys::WindowsHotkeys;
 #[cfg(windows)]

@@ -24,7 +24,9 @@ use std::thread::JoinHandle;
 use rb_core::traits::{
     Banner, BannerAction, BannerContent, HideChoice, Tray, TrayAction, TrayModel,
 };
-use rb_core::{Permissions, PlatformError, PlatformResult};
+use rb_core::{PlatformError, PlatformResult};
+
+use crate::prompt::permission_words;
 use windows::Win32::Foundation::{COLORREF, HINSTANCE, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
     BACKGROUND_MODE, BeginPaint, CreateBitmap, CreateFontW, CreateSolidBrush, DEFAULT_GUI_FONT,
@@ -176,23 +178,6 @@ fn push_tray_action(action: TrayAction) {
 }
 
 // ---- text -------------------------------------------------------------------
-
-fn permission_words(p: &Permissions) -> String {
-    let mut parts = vec!["view"];
-    if p.control {
-        parts.push("mouse and keyboard");
-    }
-    if p.system_audio {
-        parts.push("system audio");
-    }
-    if p.microphone {
-        parts.push("microphone");
-    }
-    if p.clipboard {
-        parts.push("clipboard text");
-    }
-    format!("Allowed: {}", parts.join(", "))
-}
 
 fn banner_title(content: &BannerContent) -> String {
     format!("{} can see your screen", content.requester_name)
@@ -952,6 +937,7 @@ impl Tray for WindowsTray {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rb_core::Permissions;
     use std::time::Duration;
     use windows::Win32::UI::WindowsAndMessaging::{
         GWL_EXSTYLE, GetWindowDisplayAffinity, GetWindowLongPtrW, IsWindowVisible,
@@ -966,20 +952,6 @@ mod tests {
                 ..Permissions::NONE
             },
         }
-    }
-
-    #[test]
-    fn permission_words_list_exactly_what_is_granted() {
-        assert_eq!(permission_words(&Permissions::NONE), "Allowed: view");
-        assert_eq!(
-            permission_words(&Permissions {
-                control: true,
-                system_audio: true,
-                microphone: true,
-                clipboard: true
-            }),
-            "Allowed: view, mouse and keyboard, system audio, microphone, clipboard text"
-        );
     }
 
     #[test]
