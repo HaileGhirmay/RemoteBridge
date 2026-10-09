@@ -872,6 +872,7 @@ impl WindowsUi {
     pub fn banner(&self) -> WindowsBanner {
         WindowsBanner {
             shared: self.shared.clone(),
+            shown: None,
         }
     }
 
@@ -894,20 +895,35 @@ impl Drop for WindowsUi {
 
 pub struct WindowsBanner {
     shared: Arc<Shared>,
+    /// What is on screen now. The host calls `show` on every tick, so only a
+    /// change (or a banner that vanished) rebuilds the windows; rebuilding on
+    /// every tick made the banner flicker and its buttons disappear under the
+    /// cursor.
+    shown: Option<BannerContent>,
 }
 
 impl Banner for WindowsBanner {
     fn show(&mut self, content: &BannerContent) -> PlatformResult<()> {
+        let visible = self.shared.banner_visible.load(Ordering::SeqCst);
+        if visible && self.shown.as_ref() == Some(content) {
+            return Ok(());
+        }
         self.shared.send(Command::ShowBanner(content.clone()));
         if self.shared.banner_visible.load(Ordering::SeqCst) {
+            self.shown = Some(content.clone());
             Ok(())
         } else {
+            self.shown = None;
             Err(backend("no banner window could be created"))
         }
     }
 
     fn hide(&mut self) {
-        self.shared.send(Command::HideBanner);
+        // Only a banner we showed needs hiding; the host calls this every tick
+        // while no session is shown.
+        if self.shown.take().is_some() {
+            self.shared.send(Command::HideBanner);
+        }
     }
 
     fn is_visible(&self) -> bool {
@@ -977,6 +993,34 @@ mod tests {
 
     /// Opens real windows and a tray icon on the desktop for about a second,
     /// so it only runs on request:
+    /// The host calls `show` on every tick. Repeating the same banner must not
+    /// rebuild the windows (that flickered and hid the buttons under the cursor).
+    /// `cargo test -p rb-platform-windows banner_is_not_rebuilt -- --ignored --nocapture --test-threads=1`
+    #[test]
+    #[ignore = "opens real windows on the desktop"]
+    fn banner_is_not_rebuilt_on_every_tick() {
+        let ui = WindowsUi::start().expect("UI thread");
+        let mut banner = ui.banner();
+        banner.show(&content()).unwrap();
+        settle();
+        let first = ui.shared.bars.lock().unwrap().clone();
+        assert!(!first.is_empty());
+
+        for _ in 0..20 {
+            banner.show(&content()).unwrap();
+        }
+        settle();
+        assert_eq!(
+            ui.shared.bars.lock().unwrap().clone(),
+            first,
+            "same window handles after repeated shows"
+        );
+
+        banner.hide();
+        settle();
+        assert!(!banner.is_visible());
+    }
+
     /// `cargo test -p rb-platform-windows windows_ui -- --ignored --nocapture --test-threads=1`
     #[test]
     #[ignore = "opens real windows on the desktop"]
