@@ -308,11 +308,16 @@ unsafe extern "system" fn main_proc(
 ) -> LRESULT {
     match msg {
         WM_WAKE => {
-            UI.with(|u| {
-                if let Some(ui) = u.borrow_mut().as_mut() {
-                    ui.process_commands();
-                }
-            });
+            // Take the state out while the commands run. Destroying banner windows
+            // sends messages synchronously to this procedure, which borrows the
+            // state again; holding the borrow across that call panicked ("already
+            // mutably borrowed") inside a Windows callback, which aborts the host.
+            // Any message that arrives meanwhile sees no state and does nothing.
+            let taken = UI.with(|u| u.borrow_mut().take());
+            if let Some(mut ui) = taken {
+                ui.process_commands();
+                UI.with(|u| *u.borrow_mut() = Some(ui));
+            }
             LRESULT(0)
         }
         WM_TRAY => {
