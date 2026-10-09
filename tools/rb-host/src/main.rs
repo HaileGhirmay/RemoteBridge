@@ -63,12 +63,13 @@ mod platform {
                 enroll(&path, code, name)
             }
             [cmd] if cmd == "run" => run(&path),
+            [cmd] if cmd == "invite" => invite(&path),
             _ => Err(usage()),
         }
     }
 
     fn usage() -> String {
-        "usage: rb-host enroll <8-digit code> [--name <name>] | rb-host run".into()
+        "usage: rb-host enroll <8-digit code> [--name <name>] | rb-host run | rb-host invite".into()
     }
 
     fn default_name() -> String {
@@ -110,6 +111,25 @@ mod platform {
             state::save(path, &enrolled.device_id).map_err(|e| e.to_string())?;
             println!("Enrolled device {}", enrolled.device_id);
             println!("Key fingerprint {}", enrolled.fingerprint);
+            Ok(())
+        })
+    }
+
+    /// A 12-digit support code for a viewer to enter on the website. Valid for
+    /// 10 minutes and single use. The host keeps running separately; this only
+    /// asks the server for a code.
+    fn invite(path: &std::path::Path) -> Result<(), String> {
+        let device_id = state::load(path)
+            .map_err(|e| e.to_string())?
+            .ok_or("this PC is not enrolled yet; run `rb-host enroll <code>` first")?;
+        let runtime = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
+        runtime.block_on(async {
+            let response = client(Some(device_id))?
+                .invite()
+                .await
+                .map_err(|e| format!("could not create a support code: {e}"))?;
+            println!("Support code: {}", response.code);
+            println!("Valid for 10 minutes, single use.");
             Ok(())
         })
     }
