@@ -28,7 +28,7 @@ tokio-tungstenite = { version = "0.30", features = ["rustls-tls-native-roots"] }
 webrtc = "0.21"
 rb-signaling = { path = "../signaling", optional = true }
 jsonwebtoken = { version = "9", optional = true }
-opus = { version = "0.3", optional = true }
+opus = { version = "0.4", optional = true }
 
 [dev-dependencies]
 rb-media = { path = ".", features = ["testing"] }
