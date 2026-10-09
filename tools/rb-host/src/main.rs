@@ -43,7 +43,7 @@ mod platform {
         HostRuntime, SharedClipboard, SharedInjector, SupervisorConfig, spawn_supervisor,
     };
     use rb_media::HostIdentity;
-    use rb_media::audio::SilentOpusEncoder;
+    use rb_media::opus_encoder::OpusAudioEncoder;
     use rb_media::video::OpenH264Encoder;
     use rb_platform_windows::{
         DxgiCapture, KeyScope, Microphone, SystemAudio, WindowsClipboard, WindowsConsent,
@@ -155,9 +155,7 @@ mod platform {
             display,
             udp_ip: "0.0.0.0".into(),
             video_encoder: Arc::new(|| Box::new(OpenH264Encoder::default())),
-            // Placeholder: system audio and the microphone are granted but sent as
-            // silence until a real Opus encoder exists.
-            audio_encoder: Arc::new(|| Box::new(SilentOpusEncoder::default())),
+            audio_encoder: Arc::new(|| Box::new(OpusAudioEncoder::new())),
             credential_attempts: 3,
             credential_retry: std::time::Duration::from_secs(2),
         });
