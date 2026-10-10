@@ -59,10 +59,31 @@ impl ConsentUi for WindowsConsent {
     fn show(&mut self, prompt: ConsentPrompt) -> PlatformResult<PromptId> {
         let id = PromptId(self.next_id);
         self.next_id += 1;
-        let dialog = dialog_for(&prompt);
         let caption = Self::caption(id);
         let answers = self.answers_tx.clone();
 
+        // An attended request gets the approval window with one checkbox per
+        // opt-in. Everything else is a Yes/No or OK message box.
+        if let ConsentPrompt::AttendedRequest {
+            requester_name,
+            requester_email,
+            requester_verified,
+            requested,
+        } = prompt
+        {
+            crate::approval::show(
+                id,
+                caption,
+                requester_name,
+                requester_email,
+                requester_verified,
+                requested,
+                answers,
+            )?;
+            return Ok(id);
+        }
+
+        let dialog = dialog_for(&prompt);
         thread::Builder::new()
             .name(format!("consent-{}", id.0))
             .spawn(move || {

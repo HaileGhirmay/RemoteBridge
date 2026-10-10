@@ -1,18 +1,36 @@
 //! What the local consent dialogs say, and what each button means.
 //!
 //! This is plain logic with no Win32 calls, so it is tested on every OS. The
-//! dialogs themselves live in `consent.rs`.
+//! dialogs themselves live in `consent.rs` (Yes/No message boxes) and
+//! `approval.rs` (the approval window with one checkbox per opt-in).
 //!
-//! Version one approves **view only**. Control, system audio, microphone and
-//! clipboard need their own checkboxes before they can be granted, so until
-//! those exist, a request for them is answered with view only and the dialog
-//! says so. Escalation requests are declined for the same reason.
+//! Viewing is always included. Control, system audio, microphone and clipboard
+//! are separate opt-ins: each is off unless the person ticks it, and a box is
+//! only available when the viewer asked for that permission. Escalation requests
+//! are still declined, because they are not offered in this version.
 
 use rb_core::Permissions;
 use rb_core::traits::{ConsentAnswer, ConsentPrompt, Notice};
 
 /// Length of an attended approval, and of a renewal, offered by this version.
 pub const APPROVAL_MINUTES: u32 = 30;
+
+/// The opt-ins the approval window offers, in the order shown:
+/// control, system audio, microphone, clipboard.
+pub const OPT_IN_LABELS: [&str; 4] = [
+    "Mouse and keyboard control",
+    "System audio",
+    "Microphone",
+    "Clipboard text",
+];
+
+/// One line under each opt-in, saying what it lets the viewer do.
+pub const OPT_IN_HINTS: [&str; 4] = [
+    "The viewer can move the mouse and type on this PC.",
+    "Sound playing on this PC, including meetings.",
+    "This PC's microphone. Separate opt-in, off by default.",
+    "Text only, size-limited. No files.",
+];
 
 /// One dialog: its text and whether it asks a question (Yes/No) or only
 /// informs (OK).
@@ -40,7 +58,49 @@ pub fn permission_words(p: &Permissions) -> String {
     format!("Allowed: {}", parts.join(", "))
 }
 
-/// The dialog to show for `prompt`.
+/// The opening line of the approval window.
+pub fn approval_intro(requester_name: &str, requester_email: &str, verified: bool) -> String {
+    let verified = if verified { "verified" } else { "not verified" };
+    format!(
+        "{requester_name} ({requester_email}, {verified}) asks to view this screen.\n\n\
+         Viewing is always included. Tick only what you want to allow, for \
+         {APPROVAL_MINUTES} minutes. Anything left unticked stays off."
+    )
+}
+
+/// Which opt-in boxes can be ticked: only the permissions the viewer asked for.
+pub fn opt_in_enabled(requested: &Permissions) -> [bool; 4] {
+    [
+        requested.control,
+        requested.system_audio,
+        requested.microphone,
+        requested.clipboard,
+    ]
+}
+
+/// The grant for the boxes that are ticked. A box can only grant something the
+/// viewer requested, so a tick on an unrequested permission does nothing.
+pub fn grant_from_checks(requested: &Permissions, checked: [bool; 4]) -> Permissions {
+    let enabled = opt_in_enabled(requested);
+    Permissions {
+        control: enabled[0] && checked[0],
+        system_audio: enabled[1] && checked[1],
+        microphone: enabled[2] && checked[2],
+        clipboard: enabled[3] && checked[3],
+    }
+}
+
+/// The answer for Allow in the approval window.
+pub fn approval_answer(requested: &Permissions, checked: [bool; 4]) -> ConsentAnswer {
+    ConsentAnswer::Approve {
+        grant: grant_from_checks(requested, checked),
+        approved_minutes: APPROVAL_MINUTES,
+    }
+}
+
+/// The dialog to show for `prompt` as a Yes/No or OK message box. Attended
+/// requests are shown in the approval window instead, so the text here is the
+/// same summary without the checkboxes.
 pub fn dialog_for(prompt: &ConsentPrompt) -> Dialog {
     match prompt {
         ConsentPrompt::AttendedRequest {
@@ -48,24 +108,14 @@ pub fn dialog_for(prompt: &ConsentPrompt) -> Dialog {
             requester_email,
             requester_verified,
             requested,
-        } => {
-            let verified = if *requester_verified {
-                "verified"
-            } else {
-                "not verified"
-            };
-            Dialog {
-                body: format!(
-                    "{requester_name} ({requester_email}, {verified}) asks to view this screen.\n\n\
-                     Requested: {}\n\n\
-                     This version allows view only for {APPROVAL_MINUTES} minutes. \
-                     Control, audio, microphone and clipboard stay off.\n\n\
-                     Allow view only?",
-                    permission_words(requested)
-                ),
-                question: true,
-            }
-        }
+        } => Dialog {
+            body: format!(
+                "{}\n\nRequested: {}",
+                approval_intro(requester_name, requester_email, *requester_verified),
+                permission_words(requested)
+            ),
+            question: true,
+        },
         ConsentPrompt::RenewConsent { requester_name } => Dialog {
             body: format!(
                 "Keep sharing your screen with {requester_name} for another {APPROVAL_MINUTES} minutes?"
@@ -89,21 +139,11 @@ pub fn dialog_for(prompt: &ConsentPrompt) -> Dialog {
     }
 }
 
-/// The answer for the button pressed. `yes` is true for Yes, false for No or
-/// for a dialog closed without a choice. OK-only dialogs always report
-/// `Dismissed`, whatever the button.
+/// The answer for a Yes/No or OK message box. Attended requests never come
+/// through here (they use the approval window), so closing one is a denial.
 pub fn answer_for(prompt: &ConsentPrompt, yes: bool) -> ConsentAnswer {
     match prompt {
-        ConsentPrompt::AttendedRequest { .. } => {
-            if yes {
-                ConsentAnswer::Approve {
-                    grant: Permissions::NONE,
-                    approved_minutes: APPROVAL_MINUTES,
-                }
-            } else {
-                ConsentAnswer::Deny
-            }
-        }
+        ConsentPrompt::AttendedRequest { .. } => ConsentAnswer::Deny,
         ConsentPrompt::RenewConsent { .. } => {
             if yes {
                 ConsentAnswer::Renew {
@@ -169,49 +209,90 @@ mod tests {
     }
 
     #[test]
-    fn attended_dialog_names_the_requester_and_what_was_asked() {
-        let dialog = dialog_for(&attended(requested_everything()));
-        assert!(dialog.question);
-        assert!(
-            dialog
-                .body
-                .starts_with("Haile (someone@example.com, verified) asks")
-        );
-        assert!(
-            dialog
-                .body
-                .contains("Requested: Allowed: view, mouse and keyboard")
-        );
-        assert!(dialog.body.contains("view only for 30 minutes"));
+    fn the_approval_intro_names_the_requester_and_says_view_is_included() {
+        let text = approval_intro("Haile", "someone@example.com", true);
+        assert!(text.starts_with("Haile (someone@example.com, verified) asks"));
+        assert!(text.contains("Viewing is always included"));
+        assert!(text.contains("for 30 minutes"));
+        assert!(approval_intro("Alex", "alex@example.com", false).contains("not verified"));
     }
 
     #[test]
-    fn unverified_requesters_are_labelled_as_such() {
-        let prompt = ConsentPrompt::AttendedRequest {
-            requester_name: "Alex".into(),
-            requester_email: "alex@example.com".into(),
-            requester_verified: false,
-            requested: Permissions::NONE,
+    fn only_requested_permissions_have_a_box() {
+        let requested = Permissions {
+            control: true,
+            clipboard: true,
+            ..Permissions::NONE
         };
-        assert!(dialog_for(&prompt).body.contains("not verified"));
+        assert_eq!(opt_in_enabled(&requested), [true, false, false, true]);
+        assert_eq!(opt_in_enabled(&Permissions::NONE), [false; 4]);
     }
 
     #[test]
-    fn approving_grants_view_only_even_when_more_was_requested() {
+    fn nothing_is_granted_unless_ticked() {
         assert_eq!(
-            answer_for(&attended(requested_everything()), true),
+            grant_from_checks(&requested_everything(), [false; 4]),
+            Permissions::NONE
+        );
+    }
+
+    #[test]
+    fn ticks_grant_exactly_the_ticked_requested_permissions() {
+        let grant = grant_from_checks(&requested_everything(), [true, false, true, false]);
+        assert_eq!(
+            grant,
+            Permissions {
+                control: true,
+                microphone: true,
+                ..Permissions::NONE
+            }
+        );
+    }
+
+    #[test]
+    fn a_tick_on_an_unrequested_permission_grants_nothing() {
+        let requested = Permissions {
+            control: true,
+            ..Permissions::NONE
+        };
+        let grant = grant_from_checks(&requested, [false, true, true, true]);
+        assert_eq!(grant, Permissions::NONE);
+    }
+
+    #[test]
+    fn allow_approves_the_ticked_grant_for_the_approval_window() {
+        assert_eq!(
+            approval_answer(&requested_everything(), [false, true, false, false]),
             ConsentAnswer::Approve {
-                grant: Permissions::NONE,
+                grant: Permissions {
+                    system_audio: true,
+                    ..Permissions::NONE
+                },
                 approved_minutes: APPROVAL_MINUTES,
             }
         );
     }
 
     #[test]
-    fn denying_or_closing_an_attended_request_is_a_denial() {
+    fn closing_an_attended_request_in_a_message_box_is_a_denial() {
+        assert_eq!(
+            answer_for(&attended(requested_everything()), true),
+            ConsentAnswer::Deny
+        );
         assert_eq!(
             answer_for(&attended(Permissions::NONE), false),
             ConsentAnswer::Deny
+        );
+    }
+
+    #[test]
+    fn the_attended_summary_lists_what_was_asked() {
+        let dialog = dialog_for(&attended(requested_everything()));
+        assert!(dialog.question);
+        assert!(
+            dialog
+                .body
+                .contains("Requested: Allowed: view, mouse and keyboard")
         );
     }
 
@@ -257,5 +338,11 @@ mod tests {
             restore_shortcut: "Ctrl+Alt+Shift+B".into(),
         }));
         assert!(dialog.body.contains("Ctrl+Alt+Shift+B"));
+    }
+
+    #[test]
+    fn there_is_one_label_and_hint_per_opt_in() {
+        assert_eq!(OPT_IN_LABELS.len(), 4);
+        assert_eq!(OPT_IN_HINTS.len(), 4);
     }
 }

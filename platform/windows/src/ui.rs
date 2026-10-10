@@ -704,7 +704,7 @@ impl Ui {
 
 // ---- the thread ------------------------------------------------------------------------
 
-fn register(
+pub(crate) fn register(
     class: PCWSTR,
     proc: windows::Win32::UI::WindowsAndMessaging::WNDPROC,
     instance: HINSTANCE,
