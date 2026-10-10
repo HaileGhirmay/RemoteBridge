@@ -42,7 +42,8 @@ use windows::Win32::UI::Shell::{
 use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreateIconIndirect, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyIcon,
     DestroyMenu, DestroyWindow, DispatchMessageW, GetClientRect, GetCursorPos, GetMessageW, HICON,
-    HMENU, ICONINFO, LWA_ALPHA, MF_DISABLED, MF_GRAYED, MF_SEPARATOR, MF_STRING, MSG, PostMessageW,
+    HMENU, ICONINFO, IDYES, LWA_ALPHA, MB_ICONWARNING, MB_SETFOREGROUND, MB_TOPMOST, MB_YESNO,
+    MF_CHECKED, MF_DISABLED, MF_GRAYED, MF_SEPARATOR, MF_STRING, MSG, MessageBoxW, PostMessageW,
     PostQuitMessage, RegisterClassW, RegisterWindowMessageW, SW_SHOWNOACTIVATE, SendMessageW,
     SetForegroundWindow, SetLayeredWindowAttributes, SetWindowDisplayAffinity, ShowWindow,
     TPM_NONOTIFY, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage,
@@ -51,7 +52,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WM_SETFONT, WNDCLASSW, WS_CHILD, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
     WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP, WS_VISIBLE,
 };
-use windows::core::{BOOL, PCWSTR, w};
+use windows::core::{BOOL, HSTRING, PCWSTR, w};
 
 const WM_WAKE: u32 = WM_APP + 1;
 const WM_TRAY: u32 = WM_APP + 2;
@@ -67,6 +68,7 @@ const ID_HIDE_END: usize = 106;
 const ID_TRAY_SHOW: usize = 201;
 const ID_TRAY_DISCONNECT: usize = 202;
 const ID_TRAY_SHARE: usize = 203;
+const ID_TRAY_UNATTENDED: usize = 204;
 
 /// `WDA_EXCLUDEFROMCAPTURE` (Windows 10 2004 and later).
 const WDA_EXCLUDEFROMCAPTURE: u32 = 0x11;
@@ -385,8 +387,52 @@ fn handle_tray_command(id: usize) {
         ID_TRAY_SHOW => push_tray_action(TrayAction::ShowIndicators),
         ID_TRAY_DISCONNECT => push_tray_action(TrayAction::DisconnectNow),
         ID_TRAY_SHARE => push_tray_action(TrayAction::ShareThisComputer),
+        ID_TRAY_UNATTENDED => toggle_unattended(),
         _ => {}
     }
+}
+
+/// Switching unattended access on asks first, on its own thread so the UI
+/// thread and the host loop keep running; switching it off needs no question.
+/// The answer goes to the host as a tray action, like every other menu choice.
+fn toggle_unattended() {
+    let Some((shared, currently_on)) = UI.with(|u| {
+        u.borrow().as_ref().map(|ui| {
+            let on = ui.tray.as_ref().is_some_and(|m| m.unattended_opt_in);
+            (ui.shared.clone(), on)
+        })
+    }) else {
+        return;
+    };
+    if currently_on {
+        shared
+            .tray_actions
+            .lock()
+            .unwrap()
+            .push_back(TrayAction::SetUnattendedOptIn(false));
+        return;
+    }
+    let _ = std::thread::Builder::new()
+        .name("unattended-confirm".into())
+        .spawn(move || {
+            let _guard = crate::input_guard::InputGuard::install();
+            // SAFETY: both strings outlive the call; no owner window is given.
+            let answer = unsafe {
+                MessageBoxW(
+                    None,
+                    &HSTRING::from(crate::prompt::UNATTENDED_ON_PROMPT),
+                    w!("RemoteBridge"),
+                    MB_YESNO | MB_ICONWARNING | MB_TOPMOST | MB_SETFOREGROUND,
+                )
+            };
+            if answer == IDYES {
+                shared
+                    .tray_actions
+                    .lock()
+                    .unwrap()
+                    .push_back(TrayAction::SetUnattendedOptIn(true));
+            }
+        });
 }
 
 fn show_tray_menu(owner: HWND, model: &TrayModel) -> Option<usize> {
@@ -412,6 +458,18 @@ fn show_tray_menu(owner: HWND, model: &TrayModel) -> Option<usize> {
             MF_STRING | MF_DISABLED | MF_GRAYED
         };
         append(menu, disconnect_flags, ID_TRAY_DISCONNECT, "Disconnect now");
+        append(menu, MF_SEPARATOR, 0, "");
+        let unattended_flags = if model.unattended_opt_in {
+            MF_STRING | MF_CHECKED
+        } else {
+            MF_STRING
+        };
+        append(
+            menu,
+            unattended_flags,
+            ID_TRAY_UNATTENDED,
+            "Allow unattended access on this PC",
+        );
         let mut pt = POINT::default();
         let _ = GetCursorPos(&mut pt);
         let _ = SetForegroundWindow(owner);
@@ -1121,6 +1179,7 @@ mod tests {
             session_live: true,
             connected_name: Some("Sam Helper".into()),
             consent_seconds_left: Some(1500),
+            unattended_opt_in: false,
         })
         .unwrap();
         settle();
@@ -1161,6 +1220,7 @@ mod tests {
             session_live: true,
             connected_name: Some("Sam Helper".into()),
             consent_seconds_left: Some(1500),
+            unattended_opt_in: false,
         })
         .unwrap();
         assert!(

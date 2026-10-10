@@ -32,6 +32,13 @@ pub const OPT_IN_HINTS: [&str; 4] = [
     "Text only, size-limited. No files.",
 ];
 
+/// Asked before unattended access is switched on from the tray menu.
+pub const UNATTENDED_ON_PROMPT: &str = "Allow unattended access on this PC?\n\n\
+    Someone the owner allowed on the website could then connect to this PC without anyone here approving it. \
+    This is one half of the switch: the owner must also turn it on for this device on the website.\n\n\
+    The tray icon always stays visible during an unattended session, and Ctrl+Alt+Shift+X disconnects at any time. \
+    You can turn this off again from the tray icon.";
+
 /// One dialog: its text and whether it asks a question (Yes/No) or only
 /// informs (OK).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -376,6 +383,13 @@ mod tests {
             reason: "timed out".into(),
         }));
         assert!(failed.body.contains("timed out"));
+    }
+
+    #[test]
+    fn the_unattended_prompt_names_both_halves_and_the_disconnect_shortcut() {
+        assert!(UNATTENDED_ON_PROMPT.contains("on the website"));
+        assert!(UNATTENDED_ON_PROMPT.contains("Ctrl+Alt+Shift+X"));
+        assert!(UNATTENDED_ON_PROMPT.contains("tray icon always stays visible"));
     }
 
     #[test]

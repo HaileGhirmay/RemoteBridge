@@ -14,7 +14,7 @@ use std::future::Future;
 use std::time::Duration;
 
 use rb_core::indicators::{IndicatorController, IndicatorIntent};
-use rb_core::session::{HostApi, ManagerState, MediaReport, SessionManager};
+use rb_core::session::{HostApi, HostSettings, ManagerState, MediaReport, SessionManager};
 use rb_core::traits::{Banner, Hotkeys, Notice, Tray, TrayAction};
 use tokio::sync::mpsc;
 
@@ -22,6 +22,9 @@ use crate::supervisor::SupervisorEvent;
 
 /// How often the loop runs.
 pub const TICK: Duration = Duration::from_millis(250);
+
+/// Called with the new settings whenever the local person changes one.
+pub type SettingsHook = Box<dyn FnMut(&HostSettings) + Send>;
 
 pub struct HostRuntime<A: HostApi> {
     manager: SessionManager<A>,
@@ -32,6 +35,8 @@ pub struct HostRuntime<A: HostApi> {
     supervisor: mpsc::UnboundedReceiver<SupervisorEvent>,
     default_hide_minutes: u32,
     shortcut_collision: bool,
+    /// Told whenever a local setting changes, so the host program can save it.
+    on_settings_changed: Option<SettingsHook>,
 }
 
 impl<A: HostApi> HostRuntime<A> {
@@ -52,6 +57,7 @@ impl<A: HostApi> HostRuntime<A> {
             supervisor,
             default_hide_minutes: 30,
             shortcut_collision: false,
+            on_settings_changed: None,
         }
     }
 
@@ -63,9 +69,17 @@ impl<A: HostApi> HostRuntime<A> {
         &mut self.manager
     }
 
+    /// Called with the new settings whenever the local person changes one.
+    pub fn on_settings_changed(mut self, hook: SettingsHook) -> Self {
+        self.on_settings_changed = Some(hook);
+        self
+    }
+
     /// Register the shortcuts. If the OS refuses either one, warn the user
     /// and rely on the tray menu items, and tell the server (metadata only).
     pub async fn startup(&mut self) {
+        self.indicators
+            .set_unattended_opt_in(self.manager.settings().unattended_opt_in);
         let registration = self.hotkeys.register();
         let (restore_ok, disconnect_ok) = match registration {
             Ok(r) => (r.restore, r.emergency_disconnect),
@@ -160,9 +174,16 @@ impl<A: HostApi> HostRuntime<A> {
             }
         }
         while let Some(action) = self.tray.poll_action() {
-            if action == TrayAction::ShareThisComputer {
-                self.share_this_computer().await;
-                continue;
+            match action {
+                TrayAction::ShareThisComputer => {
+                    self.share_this_computer().await;
+                    continue;
+                }
+                TrayAction::SetUnattendedOptIn(on) => {
+                    self.set_unattended_opt_in(on);
+                    continue;
+                }
+                _ => {}
             }
             disconnect |=
                 self.indicators.handle_tray_action(action) == IndicatorIntent::EmergencyDisconnect;
@@ -198,6 +219,26 @@ impl<A: HostApi> HostRuntime<A> {
                     reason: e.to_string(),
                 });
             }
+        }
+    }
+
+    /// Tray "Allow unattended access on this PC": the local half of rule 1(b).
+    /// The owner's website toggle is the other half; both are needed before an
+    /// unattended request is approved. This affects new requests only.
+    fn set_unattended_opt_in(&mut self, on: bool) {
+        let mut settings = self.manager.settings().clone();
+        if settings.unattended_opt_in == on {
+            return;
+        }
+        settings.unattended_opt_in = on;
+        self.manager.set_settings(settings.clone());
+        self.indicators.set_unattended_opt_in(on);
+        log::info!(
+            "unattended access on this PC: {}",
+            if on { "allowed" } else { "not allowed" }
+        );
+        if let Some(hook) = self.on_settings_changed.as_mut() {
+            hook(&settings);
         }
     }
 

@@ -4,8 +4,8 @@
 //! relay. Faked: the control plane (a model of the server), the screen, the
 //! keyboard and mouse, the banner, the tray and the shortcuts.
 
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use rb_core::Permissions;
@@ -51,6 +51,7 @@ struct Rig {
     trace: Trace,
     viewer: ScriptedViewer,
     host_fingerprint: String,
+    settings_seen: Arc<Mutex<Vec<bool>>>,
     _shutdown: oneshot::Sender<()>,
     _task: tokio::task::JoinHandle<()>,
 }
@@ -155,7 +156,7 @@ async fn rig(options: Options) -> Rig {
         },
     );
     let indicators = IndicatorController::new(Box::new(MemoryIndicatorStore::new()), clock);
-    let mut runtime = HostRuntime::new(
+    let runtime = HostRuntime::new(
         manager,
         indicators,
         Box::new(banner.clone()),
@@ -163,6 +164,11 @@ async fn rig(options: Options) -> Rig {
         Box::new(hotkeys.clone()),
         events,
     );
+    let settings_seen = Arc::new(Mutex::new(Vec::new()));
+    let seen = settings_seen.clone();
+    let mut runtime = runtime.on_settings_changed(Box::new(move |s: &HostSettings| {
+        seen.lock().unwrap().push(s.unattended_opt_in);
+    }));
     let (shutdown, stop) = oneshot::channel::<()>();
     let task = tokio::spawn(async move {
         runtime.startup().await;
@@ -185,6 +191,7 @@ async fn rig(options: Options) -> Rig {
         trace,
         viewer,
         host_fingerprint: host_id.fingerprint().to_owned(),
+        settings_seen,
         _shutdown: shutdown,
         _task: task,
     }
@@ -501,4 +508,32 @@ async fn the_tray_can_share_this_computer_and_shows_the_code() {
     // Nothing about sharing touches the indicators or any session.
     assert!(!r.banner.is_visible());
     assert!(r.tray.model().visible);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_tray_can_switch_unattended_opt_in_and_the_host_program_is_told() {
+    let r = rig(Options::normal()).await;
+    assert!(
+        !r.tray.model().unattended_opt_in,
+        "off until chosen locally"
+    );
+
+    r.tray.click(TrayAction::SetUnattendedOptIn(true));
+    eventually("the tray to show unattended access allowed", || {
+        r.tray.model().unattended_opt_in
+    })
+    .await;
+    assert_eq!(*r.settings_seen.lock().unwrap(), vec![true]);
+
+    // Repeating the same choice changes nothing and is not reported again.
+    r.tray.click(TrayAction::SetUnattendedOptIn(true));
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    assert_eq!(*r.settings_seen.lock().unwrap(), vec![true]);
+
+    r.tray.click(TrayAction::SetUnattendedOptIn(false));
+    eventually("the tray to show it off again", || {
+        !r.tray.model().unattended_opt_in
+    })
+    .await;
+    assert_eq!(*r.settings_seen.lock().unwrap(), vec![true, false]);
 }

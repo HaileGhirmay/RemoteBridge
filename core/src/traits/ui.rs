@@ -108,6 +108,9 @@ pub struct TrayModel {
     pub session_live: bool,
     pub connected_name: Option<String>,
     pub consent_seconds_left: Option<u64>,
+    /// The local half of unattended access is switched on (the owner's
+    /// website toggle is the other half).
+    pub unattended_opt_in: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,6 +121,9 @@ pub enum TrayAction {
     DisconnectNow,
     /// Menu item "Share this computer…": get a support code to read out.
     ShareThisComputer,
+    /// Menu item "Allow unattended access on this PC", after the local person
+    /// confirmed. `true` switches it on, `false` off.
+    SetUnattendedOptIn(bool),
 }
 
 /// Tray icon (Windows) or menu-bar item (macOS).
