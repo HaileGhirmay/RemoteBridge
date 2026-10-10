@@ -180,6 +180,13 @@ mod platform {
             credential_retry: std::time::Duration::from_secs(2),
         });
 
+        // The local half of unattended access, chosen from the tray menu.
+        let unattended_path = state::unattended_path();
+        let unattended = state::load_unattended(&unattended_path).unwrap_or_else(|e| {
+            log::warn!("could not read the unattended setting: {e}; treating it as off");
+            false
+        });
+
         let manager = SessionManager::new(
             client(Some(device_id))?,
             clock.clone(),
@@ -187,7 +194,7 @@ mod platform {
             Box::new(effects),
             keys(),
             HostSettings {
-                unattended_opt_in: false,
+                unattended_opt_in: unattended,
                 host_fingerprint: Some(identity.fingerprint().to_owned()),
             },
         );
@@ -199,7 +206,12 @@ mod platform {
             Box::new(ui.tray()),
             Box::new(WindowsHotkeys::new()),
             events,
-        );
+        )
+        .on_settings_changed(Box::new(move |s| {
+            if let Err(e) = state::save_unattended(&unattended_path, s.unattended_opt_in) {
+                log::warn!("could not save the unattended setting: {e}");
+            }
+        }));
 
         log::info!("rb-host {HOST_VERSION} running; press Ctrl+C to stop");
         runtime.startup().await;

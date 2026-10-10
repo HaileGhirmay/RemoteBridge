@@ -284,6 +284,8 @@ pub struct IndicatorController {
     live: Option<Live>,
     last: Option<Evaluation>,
     events: Vec<IndicatorEvent>,
+    /// Shown in the tray menu; the runtime keeps it in step with the settings.
+    unattended_opt_in: bool,
 }
 
 impl IndicatorController {
@@ -299,6 +301,7 @@ impl IndicatorController {
             live: None,
             last: None,
             events: Vec::new(),
+            unattended_opt_in: false,
         }
     }
 
@@ -455,6 +458,8 @@ impl IndicatorController {
             TrayAction::DisconnectNow => IndicatorIntent::EmergencyDisconnect,
             // Sharing is the runtime's job; nothing changes for the indicators.
             TrayAction::ShareThisComputer => IndicatorIntent::None,
+            // Also the runtime's job; the indicators are not involved.
+            TrayAction::SetUnattendedOptIn(_) => IndicatorIntent::None,
         }
     }
 
@@ -486,6 +491,11 @@ impl IndicatorController {
         })
     }
 
+    /// What the tray menu shows for the unattended toggle.
+    pub fn set_unattended_opt_in(&mut self, on: bool) {
+        self.unattended_opt_in = on;
+    }
+
     pub fn tray_model(&self) -> TrayModel {
         match &self.live {
             Some(l) => TrayModel {
@@ -493,12 +503,14 @@ impl IndicatorController {
                 session_live: true,
                 connected_name: Some(l.names.clone()),
                 consent_seconds_left: l.consent_seconds_left,
+                unattended_opt_in: self.unattended_opt_in,
             },
             None => TrayModel {
                 visible: true,
                 session_live: false,
                 connected_name: None,
                 consent_seconds_left: None,
+                unattended_opt_in: self.unattended_opt_in,
             },
         }
     }

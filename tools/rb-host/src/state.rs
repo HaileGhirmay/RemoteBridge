@@ -48,6 +48,27 @@ pub fn save(path: &Path, device_id: &str) -> io::Result<()> {
     fs::write(path, format!("{device_id}\n"))
 }
 
+/// `unattended.txt` next to the device id: `on` when the person at this PC
+/// allowed unattended access. Anything else, or no file, means off.
+pub fn unattended_path() -> PathBuf {
+    default_path().with_file_name("unattended.txt")
+}
+
+pub fn load_unattended(path: &Path) -> io::Result<bool> {
+    match fs::read_to_string(path) {
+        Ok(text) => Ok(text.trim() == "on"),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn save_unattended(path: &Path, on: bool) -> io::Result<()> {
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir)?;
+    }
+    fs::write(path, if on { "on\n" } else { "off\n" })
+}
+
 /// Canonical UUID shape: 8-4-4-4-12 hex digits.
 pub fn is_device_id(text: &str) -> bool {
     let groups: Vec<&str> = text.split('-').collect();
@@ -98,6 +119,23 @@ mod tests {
         let path = temp_file("refused.txt");
         assert!(save(&path, "../../etc/passwd").is_err());
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn unattended_is_off_without_a_file_and_round_trips() {
+        let path = temp_file("unattended.txt");
+        assert!(!load_unattended(&path).unwrap());
+        save_unattended(&path, true).unwrap();
+        assert!(load_unattended(&path).unwrap());
+        save_unattended(&path, false).unwrap();
+        assert!(!load_unattended(&path).unwrap());
+    }
+
+    #[test]
+    fn only_an_exact_on_switches_unattended_on() {
+        let path = temp_file("unattended-odd.txt");
+        fs::write(&path, "yes please\n").unwrap();
+        assert!(!load_unattended(&path).unwrap());
     }
 
     #[test]

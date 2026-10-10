@@ -238,6 +238,7 @@ mod tests {
             session_live: true,
             connected_name: Some("Sam".into()),
             consent_seconds_left: Some(1800),
+            unattended_opt_in: false,
         };
         tray.update(&model).unwrap();
         assert_eq!(tray_probe.model(), model);
