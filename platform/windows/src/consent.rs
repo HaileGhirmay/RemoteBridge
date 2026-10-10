@@ -92,6 +92,13 @@ impl ConsentUi for WindowsConsent {
                 } else {
                     MB_OK | MB_ICONINFORMATION
                 };
+                // Installed before the box opens, removed when this thread ends.
+                let guard = crate::input_guard::InputGuard::install();
+                if guard.is_none() {
+                    log::warn!(
+                        "input guard unavailable; the prompt is unprotected from injected input"
+                    );
+                }
                 // SAFETY: both strings outlive the call; no owner window is given,
                 // so the box is not tied to any of our windows.
                 let result = unsafe {

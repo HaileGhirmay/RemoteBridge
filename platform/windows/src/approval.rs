@@ -80,6 +80,11 @@ pub fn show(
     thread::Builder::new()
         .name(format!("approval-{}", id.0))
         .spawn(move || {
+            // Installed before the window exists, removed when this thread ends.
+            let guard = crate::input_guard::InputGuard::install();
+            if guard.is_none() {
+                log::warn!("input guard unavailable; the approval window is unprotected from injected input");
+            }
             let intro = approval_intro(&requester_name, &requester_email, requester_verified);
             // SAFETY: Win32 setup and message loop on this thread only; the window
             // and its children are destroyed before the thread ends.
