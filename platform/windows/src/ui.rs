@@ -66,6 +66,7 @@ const ID_HIDE_480: usize = 105;
 const ID_HIDE_END: usize = 106;
 const ID_TRAY_SHOW: usize = 201;
 const ID_TRAY_DISCONNECT: usize = 202;
+const ID_TRAY_SHARE: usize = 203;
 
 /// `WDA_EXCLUDEFROMCAPTURE` (Windows 10 2004 and later).
 const WDA_EXCLUDEFROMCAPTURE: u32 = 0x11;
@@ -383,6 +384,7 @@ fn handle_tray_command(id: usize) {
     match id {
         ID_TRAY_SHOW => push_tray_action(TrayAction::ShowIndicators),
         ID_TRAY_DISCONNECT => push_tray_action(TrayAction::DisconnectNow),
+        ID_TRAY_SHARE => push_tray_action(TrayAction::ShareThisComputer),
         _ => {}
     }
 }
@@ -400,6 +402,8 @@ fn show_tray_menu(owner: HWND, model: &TrayModel) -> Option<usize> {
             let minutes = secs.div_ceil(60);
             append(menu, info, 0, &format!("Consent: {minutes} min left"));
         }
+        append(menu, MF_SEPARATOR, 0, "");
+        append(menu, MF_STRING, ID_TRAY_SHARE, "Share this computer…");
         append(menu, MF_SEPARATOR, 0, "");
         append(menu, MF_STRING, ID_TRAY_SHOW, "Show indicators");
         let disconnect_flags = if model.session_live {
@@ -1139,9 +1143,16 @@ mod tests {
                 Some(WPARAM(ID_TRAY_DISCONNECT)),
                 Some(LPARAM(0)),
             );
+            SendMessageW(
+                ui.shared.main(),
+                WM_COMMAND,
+                Some(WPARAM(ID_TRAY_SHARE)),
+                Some(LPARAM(0)),
+            );
         }
         assert_eq!(tray.poll_action(), Some(TrayAction::ShowIndicators));
         assert_eq!(tray.poll_action(), Some(TrayAction::DisconnectNow));
+        assert_eq!(tray.poll_action(), Some(TrayAction::ShareThisComputer));
         assert_eq!(tray.poll_action(), None);
 
         // An attended "hide everything" removes the tray icon; restore brings it back.

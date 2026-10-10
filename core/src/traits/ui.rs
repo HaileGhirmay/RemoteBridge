@@ -16,6 +16,10 @@ pub enum Notice {
     ShortcutCollision { shortcut: String },
     /// Screen Recording / Accessibility / Microphone missing; points to settings.
     PermissionsUnavailable { what: String },
+    /// A fresh support code for the person at this machine to read out.
+    SupportCode { code: String, minutes_left: u64 },
+    /// `host/invite` failed; the reason is for the local user to see.
+    SupportCodeUnavailable { reason: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -112,6 +116,8 @@ pub enum TrayAction {
     ShowIndicators,
     /// Menu item "Disconnect now" (fallback for the shortcut).
     DisconnectNow,
+    /// Menu item "Share this computer…": get a support code to read out.
+    ShareThisComputer,
 }
 
 /// Tray icon (Windows) or menu-bar item (macOS).

@@ -453,6 +453,8 @@ impl IndicatorController {
                 IndicatorIntent::None
             }
             TrayAction::DisconnectNow => IndicatorIntent::EmergencyDisconnect,
+            // Sharing is the runtime's job; nothing changes for the indicators.
+            TrayAction::ShareThisComputer => IndicatorIntent::None,
         }
     }
 
