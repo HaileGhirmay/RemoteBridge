@@ -25,6 +25,8 @@ mod hotkeys;
 #[cfg(windows)]
 mod input;
 #[cfg(windows)]
+mod input_guard;
+#[cfg(windows)]
 mod key_store;
 #[cfg(windows)]
 mod ui;
@@ -41,6 +43,8 @@ pub use consent::WindowsConsent;
 pub use hotkeys::WindowsHotkeys;
 #[cfg(windows)]
 pub use input::{DisplayRect, INJECT_TAG, WindowsInput, primary_display};
+#[cfg(windows)]
+pub use input_guard::rejected_count as consent_injected_rejections;
 #[cfg(windows)]
 pub use key_store::{KeyBackend, KeyScope, ProviderPreference, WindowsKeyStore};
 #[cfg(windows)]
