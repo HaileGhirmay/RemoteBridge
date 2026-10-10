@@ -5,13 +5,15 @@
 //! `Hotkeys` (RegisterHotKey plus a low-level hook), `Tray`/`Banner`
 //! (per-display windows, excluded from capture), remote input (`SendInput`
 //! with scan codes), screen capture, system audio and microphone, the
-//! approval dialogs (`ConsentUi`, view-only in this version) and the text
+//! approval window (`ConsentUi`, one checkbox per opt-in) and the text
 //! clipboard.
 
 pub mod clipboard;
 pub mod keymap;
 pub mod prompt;
 
+#[cfg(windows)]
+mod approval;
 #[cfg(windows)]
 mod audio;
 #[cfg(windows)]
