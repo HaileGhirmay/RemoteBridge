@@ -124,6 +124,9 @@ pub enum TrayAction {
     /// Menu item "Allow unattended access on this PC", after the local person
     /// confirmed. `true` switches it on, `false` off.
     SetUnattendedOptIn(bool),
+    /// Menu item "Quit RemoteBridge": end every session (`host_shutdown`) and
+    /// stop the host.
+    Quit,
 }
 
 /// Tray icon (Windows) or menu-bar item (macOS).

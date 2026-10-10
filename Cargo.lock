@@ -2132,6 +2132,7 @@ dependencies = [
  "rb-media",
  "rb-platform-windows",
  "tokio",
+ "windows",
 ]
 
 [[package]]
