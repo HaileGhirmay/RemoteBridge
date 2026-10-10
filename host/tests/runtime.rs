@@ -537,3 +537,23 @@ async fn the_tray_can_switch_unattended_opt_in_and_the_host_program_is_told() {
     .await;
     assert_eq!(*r.settings_seen.lock().unwrap(), vec![true, false]);
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn quit_from_the_tray_ends_every_session_and_stops_the_host() {
+    let r = rig(Options::normal()).await;
+    r.approve(CONTROL).await;
+    r.streaming().await;
+
+    r.tray.click(TrayAction::Quit);
+    eventually("capture to stop", || !r.capture.is_running()).await;
+    eventually("the host loop to end", || r._task.is_finished()).await;
+    let sent = r.api.sessions_sent();
+    let last = sent.last().expect("the server was told");
+    assert_eq!(
+        last.action,
+        SessionAction::End {
+            reason: EndReason::HostShutdown
+        },
+        "quitting is an orderly shutdown, not an emergency disconnect"
+    );
+}

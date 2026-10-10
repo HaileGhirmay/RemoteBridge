@@ -37,6 +37,8 @@ pub struct HostRuntime<A: HostApi> {
     shortcut_collision: bool,
     /// Told whenever a local setting changes, so the host program can save it.
     on_settings_changed: Option<SettingsHook>,
+    /// Set by the tray's Quit; `run_until` ends after the current tick.
+    quit_requested: bool,
 }
 
 impl<A: HostApi> HostRuntime<A> {
@@ -58,6 +60,7 @@ impl<A: HostApi> HostRuntime<A> {
             default_hide_minutes: 30,
             shortcut_collision: false,
             on_settings_changed: None,
+            quit_requested: false,
         }
     }
 
@@ -67,6 +70,11 @@ impl<A: HostApi> HostRuntime<A> {
 
     pub fn manager_mut(&mut self) -> &mut SessionManager<A> {
         &mut self.manager
+    }
+
+    /// Whether the tray's Quit has been chosen.
+    pub fn quit_requested(&self) -> bool {
+        self.quit_requested
     }
 
     /// Called with the new settings whenever the local person changes one.
@@ -120,6 +128,9 @@ impl<A: HostApi> HostRuntime<A> {
             tokio::select! {
                 _ = interval.tick() => self.tick().await,
                 _ = &mut shutdown => break,
+            }
+            if self.quit_requested {
+                break;
             }
         }
         let _ = self.manager.shutdown().await;
@@ -181,6 +192,11 @@ impl<A: HostApi> HostRuntime<A> {
                 }
                 TrayAction::SetUnattendedOptIn(on) => {
                     self.set_unattended_opt_in(on);
+                    continue;
+                }
+                TrayAction::Quit => {
+                    log::info!("quit chosen from the tray");
+                    self.quit_requested = true;
                     continue;
                 }
                 _ => {}

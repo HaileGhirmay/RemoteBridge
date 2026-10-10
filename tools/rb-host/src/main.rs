@@ -3,14 +3,23 @@
 //! ```text
 //! rb-host enroll <8-digit code> [--name <name>]   register this PC (once)
 //! rb-host run                                     stay online and serve sessions
+//! rb-host invite                                  print a 12-digit support code
+//! rb-host autostart on|off|status                 start at login (per-user Run key)
 //! ```
+//!
+//! The exe is a windowed program, so starting it at login opens no console.
+//! Run from a terminal, it attaches to that terminal for its output; the
+//! prompt comes back at once and the host keeps running in the tray. Without
+//! a terminal, logs go to `%LOCALAPPDATA%\RemoteBridge\logs\rb-host.log`.
 //!
 //! Everything here is wiring. The rules (consent, permissions, timers, the
 //! shortcuts) live in `rb-core` and `rb-host` and are tested there.
 
 // `state` is only called on Windows; elsewhere the binary just says so.
 #![cfg_attr(not(windows), allow(dead_code))]
+#![cfg_attr(windows, windows_subsystem = "windows")]
 
+mod autostart;
 mod state;
 
 use std::process::ExitCode;
@@ -18,15 +27,28 @@ use std::process::ExitCode;
 const HOST_VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), "-windows");
 
 fn main() -> ExitCode {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let console = platform::attach_console();
+    init_logging(console);
     let args: Vec<String> = std::env::args().skip(1).collect();
     match platform::main(&args) {
         Ok(()) => ExitCode::SUCCESS,
         Err(message) => {
+            // Both: the terminal when there is one, the log file when there is not.
+            log::error!("{message}");
             eprintln!("rb-host: {message}");
             ExitCode::FAILURE
         }
     }
+}
+
+/// To the terminal when attached to one, otherwise to the log file.
+fn init_logging(console: bool) {
+    let mut builder =
+        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"));
+    if !console && let Ok(file) = state::open_log_file() {
+        builder.target(env_logger::Target::Pipe(Box::new(file)));
+    }
+    builder.init();
 }
 
 #[cfg(windows)]
@@ -50,10 +72,20 @@ mod platform {
         WindowsHotkeys, WindowsInput, WindowsKeyStore, WindowsUi, primary_display,
     };
 
-    use crate::{HOST_VERSION, state};
+    use windows::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
+
+    use crate::{HOST_VERSION, autostart, state};
 
     /// Key name in the Windows key store. One key per PC.
     const KEY_NAME: &str = "RemoteBridge device key";
+
+    /// A windowed exe has no console of its own. Started from a terminal, it
+    /// attaches to that one so `enroll` and `invite` can print. Started at
+    /// login or from Explorer there is none, and this returns false.
+    pub fn attach_console() -> bool {
+        // SAFETY: attaching to the parent's console has no preconditions.
+        unsafe { AttachConsole(ATTACH_PARENT_PROCESS) }.is_ok()
+    }
 
     pub fn main(args: &[String]) -> Result<(), String> {
         let path = state::default_path();
@@ -64,12 +96,13 @@ mod platform {
             }
             [cmd] if cmd == "run" => run(&path),
             [cmd] if cmd == "invite" => invite(&path),
+            [cmd, which] if cmd == "autostart" => autostart_cmd(which),
             _ => Err(usage()),
         }
     }
 
     fn usage() -> String {
-        "usage: rb-host enroll <8-digit code> [--name <name>] | rb-host run | rb-host invite".into()
+        "usage: rb-host enroll <8-digit code> [--name <name>] | rb-host run | rb-host invite | rb-host autostart on|off|status".into()
     }
 
     fn default_name() -> String {
@@ -132,6 +165,34 @@ mod platform {
             println!("Valid for 10 minutes, single use.");
             Ok(())
         })
+    }
+
+    /// Start at login, for the person using this PC only (no administrator
+    /// rights). Needed for unattended access, which only works while the host
+    /// is running.
+    fn autostart_cmd(which: &str) -> Result<(), String> {
+        match which {
+            "on" => {
+                let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+                let command = autostart::command_line(&exe);
+                autostart::enable(autostart::VALUE_NAME, &command).map_err(|e| e.to_string())?;
+                println!("RemoteBridge will start at login: {command}");
+                Ok(())
+            }
+            "off" => {
+                autostart::disable(autostart::VALUE_NAME).map_err(|e| e.to_string())?;
+                println!("RemoteBridge will not start at login.");
+                Ok(())
+            }
+            "status" => {
+                match autostart::status(autostart::VALUE_NAME).map_err(|e| e.to_string())? {
+                    Some(command) => println!("Starts at login: {command}"),
+                    None => println!("Does not start at login."),
+                }
+                Ok(())
+            }
+            _ => Err(usage()),
+        }
     }
 
     fn run(path: &std::path::Path) -> Result<(), String> {
@@ -213,7 +274,9 @@ mod platform {
             }
         }));
 
-        log::info!("rb-host {HOST_VERSION} running; press Ctrl+C to stop");
+        log::info!(
+            "rb-host {HOST_VERSION} running; quit from the tray icon (or Ctrl+C in a terminal)"
+        );
         runtime.startup().await;
         runtime
             .run_until(async {
@@ -227,6 +290,10 @@ mod platform {
 
 #[cfg(not(windows))]
 mod platform {
+    pub fn attach_console() -> bool {
+        true
+    }
+
     pub fn main(_args: &[String]) -> Result<(), String> {
         Err("rb-host runs on Windows 11 only".into())
     }

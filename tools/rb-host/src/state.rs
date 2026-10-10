@@ -69,6 +69,20 @@ pub fn save_unattended(path: &Path, on: bool) -> io::Result<()> {
     fs::write(path, if on { "on\n" } else { "off\n" })
 }
 
+/// `logs\rb-host.log` next to the other data, for when there is no console
+/// (started at login). Metadata only, like every log in this product.
+pub fn log_path() -> PathBuf {
+    default_path().with_file_name("logs").join("rb-host.log")
+}
+
+pub fn open_log_file() -> io::Result<fs::File> {
+    let path = log_path();
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir)?;
+    }
+    fs::OpenOptions::new().create(true).append(true).open(path)
+}
+
 /// Canonical UUID shape: 8-4-4-4-12 hex digits.
 pub fn is_device_id(text: &str) -> bool {
     let groups: Vec<&str> = text.split('-').collect();
@@ -136,6 +150,16 @@ mod tests {
         let path = temp_file("unattended-odd.txt");
         fs::write(&path, "yes please\n").unwrap();
         assert!(!load_unattended(&path).unwrap());
+    }
+
+    #[test]
+    fn the_log_file_sits_in_a_logs_folder_beside_the_data() {
+        let path = log_path();
+        assert!(path.ends_with(Path::new("logs").join("rb-host.log")));
+        assert_eq!(
+            path.parent().and_then(Path::parent),
+            default_path().parent()
+        );
     }
 
     #[test]

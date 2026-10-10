@@ -69,6 +69,7 @@ const ID_TRAY_SHOW: usize = 201;
 const ID_TRAY_DISCONNECT: usize = 202;
 const ID_TRAY_SHARE: usize = 203;
 const ID_TRAY_UNATTENDED: usize = 204;
+const ID_TRAY_QUIT: usize = 205;
 
 /// `WDA_EXCLUDEFROMCAPTURE` (Windows 10 2004 and later).
 const WDA_EXCLUDEFROMCAPTURE: u32 = 0x11;
@@ -388,6 +389,7 @@ fn handle_tray_command(id: usize) {
         ID_TRAY_DISCONNECT => push_tray_action(TrayAction::DisconnectNow),
         ID_TRAY_SHARE => push_tray_action(TrayAction::ShareThisComputer),
         ID_TRAY_UNATTENDED => toggle_unattended(),
+        ID_TRAY_QUIT => push_tray_action(TrayAction::Quit),
         _ => {}
     }
 }
@@ -470,6 +472,8 @@ fn show_tray_menu(owner: HWND, model: &TrayModel) -> Option<usize> {
             ID_TRAY_UNATTENDED,
             "Allow unattended access on this PC",
         );
+        append(menu, MF_SEPARATOR, 0, "");
+        append(menu, MF_STRING, ID_TRAY_QUIT, "Quit RemoteBridge");
         let mut pt = POINT::default();
         let _ = GetCursorPos(&mut pt);
         let _ = SetForegroundWindow(owner);
@@ -1208,10 +1212,17 @@ mod tests {
                 Some(WPARAM(ID_TRAY_SHARE)),
                 Some(LPARAM(0)),
             );
+            SendMessageW(
+                ui.shared.main(),
+                WM_COMMAND,
+                Some(WPARAM(ID_TRAY_QUIT)),
+                Some(LPARAM(0)),
+            );
         }
         assert_eq!(tray.poll_action(), Some(TrayAction::ShowIndicators));
         assert_eq!(tray.poll_action(), Some(TrayAction::DisconnectNow));
         assert_eq!(tray.poll_action(), Some(TrayAction::ShareThisComputer));
+        assert_eq!(tray.poll_action(), Some(TrayAction::Quit));
         assert_eq!(tray.poll_action(), None);
 
         // An attended "hide everything" removes the tray icon; restore brings it back.

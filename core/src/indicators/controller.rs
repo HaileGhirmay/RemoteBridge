@@ -460,6 +460,7 @@ impl IndicatorController {
             TrayAction::ShareThisComputer => IndicatorIntent::None,
             // Also the runtime's job; the indicators are not involved.
             TrayAction::SetUnattendedOptIn(_) => IndicatorIntent::None,
+            TrayAction::Quit => IndicatorIntent::None,
         }
     }
 

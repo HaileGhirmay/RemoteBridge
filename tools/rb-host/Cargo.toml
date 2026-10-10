@@ -20,6 +20,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "tim
 
 [target."cfg(windows)".dependencies]
 rb-platform-windows = { path = "../../platform/windows" }
+windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_System_Registry", "Win32_System_Console"] }
 
 [lints]
 workspace = true
