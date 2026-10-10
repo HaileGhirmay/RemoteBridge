@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use rb_core::indicators::{IndicatorController, IndicatorIntent};
 use rb_core::session::{HostApi, ManagerState, MediaReport, SessionManager};
-use rb_core::traits::{Banner, Hotkeys, Notice, Tray};
+use rb_core::traits::{Banner, Hotkeys, Notice, Tray, TrayAction};
 use tokio::sync::mpsc;
 
 use crate::supervisor::SupervisorEvent;
@@ -160,6 +160,10 @@ impl<A: HostApi> HostRuntime<A> {
             }
         }
         while let Some(action) = self.tray.poll_action() {
+            if action == TrayAction::ShareThisComputer {
+                self.share_this_computer().await;
+                continue;
+            }
             disconnect |=
                 self.indicators.handle_tray_action(action) == IndicatorIntent::EmergencyDisconnect;
         }
@@ -172,6 +176,27 @@ impl<A: HostApi> HostRuntime<A> {
                     "emergency disconnect: the server was not told ({} errors); local media is stopped",
                     errors.len()
                 );
+            }
+        }
+    }
+
+    /// Tray "Share this computer…": ask the server for a support code and
+    /// show it to the person at the machine. Only the server decides whether
+    /// the code may be used; the host just displays it.
+    async fn share_this_computer(&mut self) {
+        match self.manager.get_help().await {
+            Ok(info) => {
+                let minutes_left = self.manager.invite_seconds_left().unwrap_or(0).div_ceil(60);
+                self.manager.notify(Notice::SupportCode {
+                    code: info.code,
+                    minutes_left,
+                });
+            }
+            Err(e) => {
+                log::warn!("support code unavailable: {e}");
+                self.manager.notify(Notice::SupportCodeUnavailable {
+                    reason: e.to_string(),
+                });
             }
         }
     }

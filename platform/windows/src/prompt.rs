@@ -58,6 +58,15 @@ pub fn permission_words(p: &Permissions) -> String {
     format!("Allowed: {}", parts.join(", "))
 }
 
+/// "123456789012" as "1234 5678 9012", the way the website shows it.
+pub fn support_code_groups(code: &str) -> String {
+    code.as_bytes()
+        .chunks(4)
+        .map(|c| String::from_utf8_lossy(c).into_owned())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// The opening line of the approval window.
 pub fn approval_intro(requester_name: &str, requester_email: &str, verified: bool) -> String {
     let verified = if verified { "verified" } else { "not verified" };
@@ -170,6 +179,13 @@ fn notice_text(notice: &Notice) -> String {
         ),
         Notice::ShortcutCollision { shortcut } => format!(
             "Could not register {shortcut}. Use the tray icon menu instead."
+        ),
+        Notice::SupportCode { code, minutes_left } => format!(
+            "Your support code is {}.\n\nRead it to the person helping you. It works once and expires in {minutes_left} minutes. They can see your screen only after you approve their request here.",
+            support_code_groups(code)
+        ),
+        Notice::SupportCodeUnavailable { reason } => format!(
+            "Could not get a support code: {reason}. Check the internet connection and try again from the tray icon."
         ),
         Notice::PermissionsUnavailable { what } => format!(
             "RemoteBridge needs {what} permission for this to work. Open the system settings to allow it."
@@ -338,6 +354,28 @@ mod tests {
             restore_shortcut: "Ctrl+Alt+Shift+B".into(),
         }));
         assert!(dialog.body.contains("Ctrl+Alt+Shift+B"));
+    }
+
+    #[test]
+    fn support_codes_are_shown_in_groups_of_four() {
+        assert_eq!(support_code_groups("123456789012"), "1234 5678 9012");
+        assert_eq!(support_code_groups("12345"), "1234 5");
+        assert_eq!(support_code_groups(""), "");
+    }
+
+    #[test]
+    fn the_support_code_notice_shows_the_grouped_code_and_the_time_left() {
+        let dialog = dialog_for(&ConsentPrompt::Notice(Notice::SupportCode {
+            code: "844661833066".into(),
+            minutes_left: 10,
+        }));
+        assert!(!dialog.question);
+        assert!(dialog.body.contains("8446 6183 3066"));
+        assert!(dialog.body.contains("10 minutes"));
+        let failed = dialog_for(&ConsentPrompt::Notice(Notice::SupportCodeUnavailable {
+            reason: "timed out".into(),
+        }));
+        assert!(failed.body.contains("timed out"));
     }
 
     #[test]

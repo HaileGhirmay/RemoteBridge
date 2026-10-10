@@ -22,7 +22,7 @@ use rb_core::protocol::types::{
 use rb_core::session::{HostSettings, SessionManager};
 use rb_core::traits::{
     Banner, BannerAction, ConsentAnswer, ConsentPrompt, HideChoice, HotkeyEvent, Notice,
-    SystemClock,
+    SystemClock, TrayAction,
 };
 use rb_core::types::DisplayId;
 use rb_host::{HostRuntime, SharedClipboard, SharedInjector, SupervisorConfig, spawn_supervisor};
@@ -470,4 +470,35 @@ async fn the_host_will_not_connect_to_a_viewer_the_server_has_not_vouched_for() 
         r.viewer.state.tracks.lock().await.is_empty(),
         "no media track was ever offered to an unverified viewer"
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_tray_can_share_this_computer_and_shows_the_code() {
+    let r = rig(Options::normal()).await;
+    // The countdown follows server time, which the host learns from its first
+    // poll; a real host has polled long before anyone opens the tray menu.
+    eventually("the first poll", || r.trace.count("api:poll") >= 1).await;
+    r.tray.click(TrayAction::ShareThisComputer);
+    eventually("the support code to be shown", || {
+        r.ui.shown()
+            .iter()
+            .any(|(_, p)| matches!(p, ConsentPrompt::Notice(Notice::SupportCode { .. })))
+    })
+    .await;
+    let shown = r.ui.shown();
+    let Some((_, ConsentPrompt::Notice(Notice::SupportCode { code, minutes_left }))) = shown
+        .iter()
+        .find(|(_, p)| matches!(p, ConsentPrompt::Notice(Notice::SupportCode { .. })))
+    else {
+        unreachable!("found above");
+    };
+    assert_eq!(code.len(), 12, "a 12-digit support code");
+    assert!(code.bytes().all(|b| b.is_ascii_digit()));
+    assert!(
+        (9..=10).contains(minutes_left),
+        "valid for ten minutes, got {minutes_left}"
+    );
+    // Nothing about sharing touches the indicators or any session.
+    assert!(!r.banner.is_visible());
+    assert!(r.tray.model().visible);
 }
