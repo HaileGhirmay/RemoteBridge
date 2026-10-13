@@ -57,6 +57,8 @@ jobs:
           $version = if ($env:GITHUB_REF -like 'refs/tags/*') { $env:GITHUB_REF_NAME } else { 'dev-' + $env:GITHUB_SHA.Substring(0, 7) }
           New-Item -ItemType Directory -Path dist | Out-Null
           Copy-Item target\release\rb-host.exe, target\release\rb-native-host.exe, tools\install-native-host.ps1 -Destination dist
+          # Read by the browser extension's native shim (plain version text).
+          ($version -replace '^v', '') | Set-Content -Path dist\rb-host.version
           @"
           RemoteBridge host for Windows 11 ($version)
 
