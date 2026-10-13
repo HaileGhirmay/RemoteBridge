@@ -5,7 +5,12 @@
 //! rb-host run                                     stay online and serve sessions
 //! rb-host invite                                  print a 12-digit support code
 //! rb-host autostart on|off|status                 start at login (per-user Run key)
+//! rb-host --open-window                           what the browser extension's shim
+//!                                                 calls: start if not already running
 //! ```
+//!
+//! Only one host runs per user session: `run` holds a named mutex and a second
+//! `run` refuses, while `--open-window` just exits quietly.
 //!
 //! The exe is a windowed program, so starting it at login opens no console.
 //! Run from a terminal, it attaches to that terminal for its output; the
@@ -72,7 +77,10 @@ mod platform {
         WindowsHotkeys, WindowsInput, WindowsKeyStore, WindowsUi, primary_display,
     };
 
+    use windows::Win32::Foundation::{CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE};
     use windows::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
+    use windows::Win32::System::Threading::CreateMutexW;
+    use windows::core::w;
 
     use crate::{HOST_VERSION, autostart, state};
 
@@ -94,7 +102,8 @@ mod platform {
             [cmd, code, flag, name] if cmd == "enroll" && flag == "--name" => {
                 enroll(&path, code, name)
             }
-            [cmd] if cmd == "run" => run(&path),
+            [cmd] if cmd == "run" => run(&path, false),
+            [cmd] if cmd == "--open-window" => run(&path, true),
             [cmd] if cmd == "invite" => invite(&path),
             [cmd, which] if cmd == "autostart" => autostart_cmd(which),
             _ => Err(usage()),
@@ -102,7 +111,7 @@ mod platform {
     }
 
     fn usage() -> String {
-        "usage: rb-host enroll <8-digit code> [--name <name>] | rb-host run | rb-host invite | rb-host autostart on|off|status".into()
+        "usage: rb-host enroll <8-digit code> [--name <name>] | rb-host run | rb-host invite | rb-host autostart on|off|status | rb-host --open-window".into()
     }
 
     fn default_name() -> String {
@@ -195,7 +204,48 @@ mod platform {
         }
     }
 
-    fn run(path: &std::path::Path) -> Result<(), String> {
+    /// The one running host's claim on this user session, released when the
+    /// process ends.
+    pub(crate) struct SingleInstance(HANDLE);
+
+    impl Drop for SingleInstance {
+        fn drop(&mut self) {
+            // SAFETY: a handle this process created.
+            let _ = unsafe { CloseHandle(self.0) };
+        }
+    }
+
+    /// `None` when another host already holds the claim.
+    pub(crate) fn claim_instance() -> Option<SingleInstance> {
+        // SAFETY: a named mutex in the per-session namespace; the handle is
+        // closed in Drop. The error code is read before anything else can
+        // overwrite it.
+        let (created, already) = unsafe {
+            let created = CreateMutexW(None, false, w!("Local\\RemoteBridgeHost"));
+            (created, GetLastError() == ERROR_ALREADY_EXISTS)
+        };
+        let handle = created.ok()?;
+        if already {
+            // SAFETY: closing the handle we were just given.
+            let _ = unsafe { CloseHandle(handle) };
+            return None;
+        }
+        Some(SingleInstance(handle))
+    }
+
+    /// `from_open` is the shim's `--open-window`: an already running host is
+    /// then the wanted state, not an error.
+    fn run(path: &std::path::Path, from_open: bool) -> Result<(), String> {
+        let Some(_instance) = claim_instance() else {
+            log::info!("RemoteBridge is already running");
+            if from_open {
+                return Ok(());
+            }
+            return Err("RemoteBridge is already running; quit it from the tray icon first".into());
+        };
+        if let Err(e) = state::write_version_marker(env!("CARGO_PKG_VERSION")) {
+            log::warn!("could not write rb-host.version beside the exe: {e}");
+        }
         let device_id = state::load(path)
             .map_err(|e| e.to_string())?
             .ok_or("this PC is not enrolled yet; run `rb-host enroll <code>` first")?;
@@ -285,6 +335,22 @@ mod platform {
             .await;
         log::info!("stopped");
         Ok(())
+    }
+}
+
+#[cfg(all(test, windows))]
+mod instance_tests {
+    use super::platform::claim_instance;
+
+    #[test]
+    fn only_one_claim_at_a_time() {
+        let first = claim_instance().expect("first claim");
+        assert!(claim_instance().is_none(), "a second host must be refused");
+        drop(first);
+        assert!(
+            claim_instance().is_some(),
+            "free again once the first is gone"
+        );
     }
 }
 

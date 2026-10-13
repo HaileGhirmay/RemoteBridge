@@ -83,6 +83,19 @@ pub fn open_log_file() -> io::Result<fs::File> {
     fs::OpenOptions::new().create(true).append(true).open(path)
 }
 
+/// `rb-host.version` beside the exe. The browser extension's native shim reads
+/// it to show that the host is installed and which version; the release zip
+/// ships one and the host rewrites it on every start, so a hand-copied exe
+/// gets one too.
+pub fn version_marker_path(exe: &Path) -> PathBuf {
+    exe.with_file_name("rb-host.version")
+}
+
+pub fn write_version_marker(version: &str) -> io::Result<()> {
+    let exe = std::env::current_exe()?;
+    fs::write(version_marker_path(&exe), format!("{version}\n"))
+}
+
 /// Canonical UUID shape: 8-4-4-4-12 hex digits.
 pub fn is_device_id(text: &str) -> bool {
     let groups: Vec<&str> = text.split('-').collect();
@@ -159,6 +172,15 @@ mod tests {
         assert_eq!(
             path.parent().and_then(Path::parent),
             default_path().parent()
+        );
+    }
+
+    #[test]
+    fn the_version_marker_sits_beside_the_exe() {
+        let exe = Path::new("/opt/rb/rb-host.exe");
+        assert_eq!(
+            version_marker_path(exe),
+            Path::new("/opt/rb/rb-host.version")
         );
     }
 
