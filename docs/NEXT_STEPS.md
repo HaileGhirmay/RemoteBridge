@@ -227,7 +227,7 @@ The shared core, protocol client, session manager, timers and permission filteri
 4. Menu bar item, banner window, consent dialogs, global shortcuts `Control+Option+Shift+B` and `X`.
 5. Signed and notarized app bundle, Launch Agent for autostart.
 
-Before starting you need: a Mac on macOS 14 or later, Xcode, and an Apple Developer account (99 USD a year) for signing and notarization. The `macos/` Swift package in the repo is the starting point.
+Before starting you need: a Mac on macOS 14 or later, Xcode, and an Apple Developer account (99 USD a year) for signing and notarization. The Swift package in `platform/macos/` is the starting point.
 
 ---
 
