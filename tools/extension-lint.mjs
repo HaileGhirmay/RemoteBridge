@@ -107,6 +107,15 @@ for (const file of files) {
     }
     if (/<script\b(?![^>]*\bsrc=)[^>]*>/.test(html)) errors.push(`${file}: inline script is not allowed`);
     if (/\son[a-z]+="/i.test(html)) errors.push(`${file}: inline event handler is not allowed`);
+    // A page CSP without connect-src falls back to default-src 'self', which
+    // blocks the popup's own fetch to the website (found in the first browser test).
+    const pageCsp = html.match(/http-equiv="Content-Security-Policy"\s+content="([^"]*)"/)?.[1];
+    if (pageCsp) {
+      const connect = pageCsp.match(/connect-src([^;]*)/)?.[1] ?? "";
+      if (!connect.split(/\s+/).includes(sitePrefix)) {
+        errors.push(`${file}: the page CSP needs connect-src ${sitePrefix}, or every fetch to the website is blocked`);
+      }
+    }
   }
   if (file.endsWith(".js") || file.endsWith(".mjs")) {
     const js = read(file);
